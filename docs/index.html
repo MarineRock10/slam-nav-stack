@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLAM-NAV-STACK :: Mission Console</title>
+<meta name="description" content="slam-nav-stack field navigation console — localization, mapping and mission telemetry.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230a0e14'/><path d='M6 26L16 6l10 20z' fill='none' stroke='%2333ff99' stroke-width='2'/><circle cx='16' cy='16' r='3' fill='%2333ff99'/></svg>">
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+<div class="frame">
+  <!-- ==================== TOP STATUS BAR ==================== -->
+  <header class="statusbar">
+    <div class="sb-left">
+      <span class="logo-mark">◢◤</span>
+      <span class="logo-text">SLAM-NAV-STACK</span>
+      <span class="sb-sep">|</span>
+      <span class="sb-mode">FIELD NAV CONSOLE v2.4.1</span>
+    </div>
+    <div class="sb-right">
+      <span class="sb-item" id="sbClock">00:00:00</span>
+      <span class="sb-item" id="sbBatt">BAT ▮▮▮▮▮ 97%</span>
+      <span class="sb-item" id="sbGps">GPS FIX</span>
+      <span class="sb-item blink" id="sbLink">LINK ●</span>
+    </div>
+  </header>
+
+  <!-- ==================== NAV TABS ==================== -->
+  <nav class="tabs">
+    <button class="tab active" data-view="map">FIELD MAP</button>
+    <button class="tab" data-view="console">MISSION CONSOLE</button>
+    <button class="tab" data-view="log">SENSOR LOG</button>
+    <span class="tabs-spacer"></span>
+    <button class="tab tab-icon" id="btnSettings" title="SYSTEM CONFIG">⚙ CONFIG</button>
+  </nav>
+
+  <main class="content">
+    <!-- ==================== VIEW 1: FIELD MAP / DASHBOARD ==================== -->
+    <section id="view-map" class="view active">
+      <div class="grid-2col">
+        <div class="panel">
+          <div class="panel-title"><span class="pt-dot"></span>FIELD MAP <span class="pt-tag">LIVE</span></div>
+          <canvas id="mapCanvas" class="map-canvas"></canvas>
+          <div class="map-legend">
+            <span><i class="lg lg-explored"></i>EXPLORED</span>
+            <span><i class="lg lg-frontier"></i>FRONTIER</span>
+            <span><i class="lg lg-obstacle"></i>UNSEEN</span>
+            <span><i class="lg lg-waypoint"></i>WAYPOINT</span>
+          </div>
+        </div>
+
+        <div class="col-stack">
+          <div class="panel">
+            <div class="panel-title"><span class="pt-dot"></span>MISSION STATUS</div>
+            <div class="stat-grid">
+              <div class="stat">
+                <div class="stat-label">MISSION ETA</div>
+                <div class="stat-value big" id="stExam">--d</div>
+                <div class="stat-sub" id="stExamDate">TARGET --</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">TODAY PROGRESS</div>
+                <div class="stat-value" id="stToday">0/25</div>
+                <div class="stat-sub" id="stTodayPct">0%</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">REVIEWS DUE</div>
+                <div class="stat-value" id="stDue">0</div>
+                <div class="stat-sub" id="stDueSub">QUEUED</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">STREAK</div>
+                <div class="stat-value" id="stStreak">0</div>
+                <div class="stat-sub">CONSECUTIVE DAYS</div>
+              </div>
+            </div>
+            <div class="statbar-wrap">
+              <div class="statbar-label"><span>VOCAB COVERAGE</span><span id="stCoverage">0%</span></div>
+              <div class="statbar"><div class="statbar-fill" id="stCoverageFill"></div></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title"><span class="pt-dot"></span>TELEMETRY <span class="pt-tag">14D</span></div>
+            <canvas id="chartCanvas" class="chart-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn btn-primary" id="btnStart">▸ START MISSION</button>
+        <button class="btn" id="btnReview">↻ REVIEW DUE</button>
+        <span class="action-hint">HINT: 1-4 GRADE · SPACE SPEAK · CTRL+SHIFT+M PLAIN MODE</span>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: MISSION CONSOLE / STUDY SESSION ==================== -->
+    <section id="view-console" class="view">
+      <div class="console-head">
+        <div class="panel-title"><span class="pt-dot"></span>MISSION CONSOLE <span class="pt-tag" id="mcMode">NAVIGATION</span></div>
+        <div class="console-meta" id="mcMeta">WAYPOINTS: 0 / 0</div>
+      </div>
+      <div class="console-progress">
+        <div class="statbar"><div class="statbar-fill" id="mcProgress"></div></div>
+      </div>
+
+      <div class="card-stage" id="cardStage">
+        <!-- Flashcard injected here -->
+      </div>
+
+      <div class="grade-bar" id="gradeBar">
+        <button class="btn grade grade-again" data-q="0">AGAIN</button>
+        <button class="btn grade grade-hard" data-q="1">HARD</button>
+        <button class="btn grade grade-good" data-q="2">GOOD</button>
+        <button class="btn grade grade-easy" data-q="3">EASY</button>
+      </div>
+      <div class="session-done" id="sessionDone" hidden>
+        <div class="done-symbol">◆</div>
+        <div class="done-title" id="doneTitle">MISSION COMPLETE</div>
+        <div class="done-sub" id="doneSub">--</div>
+        <button class="btn btn-primary" id="btnDoneReturn">↩ RETURN TO FIELD MAP</button>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: SENSOR LOG / WORD LIBRARY ==================== -->
+    <section id="view-log" class="view">
+      <div class="panel">
+        <div class="panel-title"><span class="pt-dot"></span>SENSOR LOG — LEXICON INDEX <span class="pt-tag" id="lgCount">0 ENTRIES</span></div>
+        <div class="log-controls">
+          <input type="text" id="lgSearch" class="input" placeholder="SEARCH LEXICON... (e.g. 'abandon')" autocomplete="off">
+          <button class="btn" id="btnImport">⇪ IMPORT</button>
+          <button class="btn" id="btnExport">⇩ EXPORT</button>
+          <input type="file" id="fileImport" accept=".json,.csv" hidden>
+        </div>
+        <div class="log-summary" id="lgSummary"></div>
+        <div class="log-list" id="lgList"></div>
+        <div class="log-pager" id="lgPager"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== SETTINGS MODAL ==================== -->
+  <div class="modal-backdrop" id="settingsModal" hidden>
+    <div class="modal">
+      <div class="panel-title"><span class="pt-dot"></span>SYSTEM CONFIG</div>
+      <div class="form-row">
+        <label for="cfgGoal">DAILY NEW-WORD TARGET</label>
+        <input type="number" id="cfgGoal" class="input" min="1" max="200" value="25">
+      </div>
+      <div class="form-row">
+        <label for="cfgExam">MISSION DEADLINE (YYYY-MM-DD)</label>
+        <input type="date" id="cfgExam" class="input">
+      </div>
+      <div class="form-row">
+        <label class="chk"><input type="checkbox" id="cfgTrans" checked> SHOW TRANSLATIONS ON CARDS</label>
+      </div>
+      <div class="form-row">
+        <label class="chk"><input type="checkbox" id="cfgVoice" checked> VOICE FEEDBACK (TTS)</label>
+      </div>
+      <div class="form-row">
+        <label for="cfgRate">SPEECH RATE</label>
+        <input type="range" id="cfgRate" min="0.6" max="1.4" step="0.05" value="0.9">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnCfgSave">SAVE CONFIG</button>
+        <button class="btn" id="btnCfgCancel">CANCEL</button>
+        <button class="btn btn-danger" id="btnCfgReset">RESET ALL DATA</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span>slam-nav-stack © 2026 · map fusion · odometry · waypoint navigation</span>
+    <span>ROS2 Humble compatible · GPL-3.0</span>
+  </footer>
+</div>
+
+<script src="assets/js/words/core-vocab.js"></script>
+<script src="assets/js/words/ielts-data.js"></script>
+<script src="assets/js/srs.js"></script>
+<script src="assets/js/lexicon.js"></script>
+<script src="assets/js/telemetry.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>
