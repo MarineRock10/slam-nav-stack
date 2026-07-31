@@ -772,6 +772,22 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   border-bottom: 2px solid var(--accent);
   padding: 0 2px;
 }
+.scene-word.speaking {
+  color: #fff;
+  background: var(--cyan);
+  border-bottom-color: var(--cyan);
+  border-radius: 3px;
+}
+.scene-zh {
+  color: var(--fg-dim);
+  font-size: 13px;
+  margin-top: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+.nav-bar { display: flex; justify-content: space-between; gap: 10px; }
+.nav-bar .btn { flex: 1; }
+.nav-bar .btn:disabled { opacity: 0.35; cursor: default; }
 .card-def.big { font-size: 18px; line-height: 1.6; margin: 8px auto; max-width: 520px; }
 .spell-hint {
   font-family: var(--font);

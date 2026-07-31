@@ -352,6 +352,21 @@
       return out;
     },
 
+    /* ---- sentence-bank Chinese translations ----
+     * SENTENCE_ZH = [[en, zh], ...] covering the sentence bank, so
+     * scene sentences show a Chinese gloss under the English text. */
+    _zhMap: null,
+    sentenceZh(sentence) {
+      if (!this._zhMap) {
+        this._zhMap = new Map();
+        const arr = global.SENTENCE_ZH || [];
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i] && arr[i][0]) this._zhMap.set(arr[i][0], arr[i][1]);
+        }
+      }
+      return this._zhMap.get(String(sentence || "").trim()) || "";
+    },
+
     /* ---- unfamiliar collection (memory deck hot zone) ----
      * Words flagged in practice (dbl-click) or auto-flagged after
      * repeated failures. src: "practice" | "weak" | "manual" */

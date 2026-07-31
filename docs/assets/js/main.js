@@ -498,8 +498,47 @@
       else if (s.phase === "result") this.renderGroupResult();
     },
 
-    senseListHtml(senses, showTrans) {
-      return senses.slice(0, 4).map((s2) =>
+    /* Chinese translation line for a scene sentence, when available */
+    sceneZhHtml(sentence) {
+      const zh = Lexicon.sentenceZh(sentence);
+      return zh ? '<div class="scene-zh">' + this.esc(zh) + "</div>" : "";
+    },
+
+    /* ---- navigation: previous / next across stages ---- */
+    goBack() {
+      const s = this.session;
+      if (!s) return;
+      if (s.phase === "gap") { s.phase = "spell"; this.renderPhase(); return; }
+      if (s.phase === "spell") { s.phase = "meaning"; this.renderPhase(); return; }
+      // meaning / result -> previous group's result
+      if (s.gi > 0) {
+        s.gi--;
+        s.wi = s.groups[s.gi].words.length - 1;
+        s.phase = "result";
+        this.renderPhase();
+      }
+    },
+    goNext() {
+      const s = this.session;
+      if (!s) return;
+      if (s.phase === "meaning") { s.phase = "spell"; this.renderPhase(); return; }
+      if (s.phase === "spell") { this.advanceToGap(); return; }
+      if (s.phase === "gap") { this.gapNext(); return; }
+      if (s.phase === "result") {
+        s.gi++;
+        s.wi = 0;
+        if (s.gi >= s.groups.length) { this.endSession(); return; }
+        s.phase = "meaning";
+        this.renderPhase();
+      }
+    },
+    navBar(backId, nextId, nextLabel, backDisabled) {
+      return '<div class="step-bar nav-bar">' +
+        '<button class="btn" id="' + backId + '"' + (backDisabled ? " disabled" : "") + '>◀ BACK</button>' +
+        '<button class="btn btn-primary" id="' + nextId + '">' + nextLabel + " ▸</button></div>";
+    },
+
+    senseListHtml(senses, showTrans) {      return senses.slice(0, 4).map((s2) =>
         '<div class="sense-item">' +
         (s2.pos ? '<span class="sense-pos">' + s2.pos + "</span>" : "") +
         (s2.en ? '<span class="sense-en">' + this.esc(s2.en) + "</span>" : "") +
@@ -525,7 +564,9 @@
       }
       const sceneHtml = sceneSents.map((s2, i) =>
         '<div class="scene-sentence">' + (sceneSents.length > 1 ? "<span class='scene-no'>" + (i + 1) + "</span>" : "") +
-        '<span class="scene-text">“' + this.highlightWords(s2, group.words.map((w) => w.ent.w)) + '”</span></div>'
+        '<span class="scene-text" id="sceneTxt' + i + '">“' + this.highlightWords(s2, group.words.map((w) => w.ent.w)) + '”</span>' +
+        this.sceneZhHtml(s2) +
+        "</div>"
       ).join("");
       // senses of every word in the scene — the sentence brings them in together
       const wordBlocks = group.words.map((it) => {
@@ -549,18 +590,21 @@
         '<div class="card-tts">' +
         '<button class="tts-btn" id="btnScene">◉ PLAY SCENE</button> ' +
         '<button class="tts-btn" id="btnWord">◉ WORD ONLY</button></div>' +
-        '<div class="step-bar"><button class="btn btn-primary" id="btnPhaseNext">CONTINUE TO SPELL ▸</button></div>' +
+        this.navBar("btnBack", "btnPhaseNext", "CONTINUE TO SPELL", s.gi === 0) +
         '<div class="card-index">SCENE AUDIO PLAYS AUTOMATICALLY — EVERY WORD IN CONTEXT</div>' +
         "</div>";
       const sceneAudio = sceneSents[0] || item.ent.w;
-      $("btnScene").addEventListener("click", () => this.speak(sceneAudio));
+      const sceneEl = $("sceneTxt0");
+      $("btnScene").addEventListener("click", () => this.speakScene(sceneAudio, sceneEl));
       $("btnWord").addEventListener("click", () => this.speak(item.ent.w));
       $("btnPhaseNext").addEventListener("click", () => {
         s.phase = "spell";
         this.renderPhase();
       });
-      // auto-play the whole scene sentence (falls back to the word)
-      setTimeout(() => this.speak(sceneAudio), 350);
+      const backEl = $("btnBack");
+      if (backEl) backEl.addEventListener("click", () => this.goBack());
+      // auto-play the whole scene sentence with word highlighting
+      setTimeout(() => this.speakScene(sceneAudio, sceneEl), 350);
     },
 
     /* ---- phase 2: spell with letter-by-letter hints ---- */
@@ -592,10 +636,13 @@
         '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD...">' +
         "</div>" +
         '<div class="typing-feedback" id="typingFeedback"></div>' +
+        this.navBar("btnBack", "btnSkip", "SKIP") +
         '<div class="card-index">WORD LENGTH SHOWN · ENTER CHECK · SPACE RE-HEAR</div>' +
         "</div>";
       $("btnWord2").addEventListener("click", () => this.speak(ent.w));
-      $("btnScene2").addEventListener("click", () => this.speak(sceneTxt));
+      $("btnScene2").addEventListener("click", () => this.speakScene(sceneTxt));
+      $("btnBack").addEventListener("click", () => this.goBack());
+      $("btnSkip").addEventListener("click", () => this.goNext());
       const input = $("typingInput");
       input.focus();
       input.addEventListener("keydown", (e) => {
@@ -688,16 +735,20 @@
         '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="FILL THE WORD...">' +
         "</div>" +
         '<div class="typing-feedback" id="typingFeedback"></div>' +
+        this.navBar("btnBack", "btnSkip", "SKIP") +
         '<div class="card-index">ENTER CHECK · SPACE RE-HEAR</div>' +
         "</div>";
       const input = $("typingInput");
+      const sceneEl = $("cardStage").querySelector(".card-example.big");
       input.focus();
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") this.checkGap();
-        else if (e.key === " ") { e.preventDefault(); this.speak(sentence); }
+        else if (e.key === " ") { e.preventDefault(); this.speakScene(sentence, sceneEl); }
       });
-      // hear the whole sentence, then fill the gap
-      setTimeout(() => this.speak(sentence), 300);
+      $("btnBack").addEventListener("click", () => this.goBack());
+      $("btnSkip").addEventListener("click", () => this.goNext());
+      // hear the whole sentence with word highlighting, then fill the gap
+      setTimeout(() => this.speakScene(sentence, sceneEl), 300);
     },
 
     checkGap() {
@@ -795,9 +846,13 @@
         (group.scene ? '<div class="scene-sentence" style="font-size:13px">“' +
           this.highlightWords(group.scene, group.words.map((w) => w.ent.w)) + '”</div>' : "") +
         '<div class="gr-list">' + rows + "</div>" +
-        '<div class="step-bar"><button class="btn btn-primary" id="btnNextGroup">' +
+        '<div class="step-bar nav-bar">' +
+        (s.gi > 0 ? '<button class="btn" id="btnBackRes">◀ BACK</button>' : '<span></span>') +
+        '<button class="btn btn-primary" id="btnNextGroup">' +
         (s.gi + 1 < s.groups.length ? "NEXT GROUP ▸" : "FINISH SESSION ▸") + "</button></div>" +
         "</div>";
+      const backRes = $("btnBackRes");
+      if (backRes) backRes.addEventListener("click", () => this.goBack());
       $("btnNextGroup").addEventListener("click", () => {
         s.gi++;
         s.wi = 0;
@@ -904,18 +959,84 @@
       const st = Lexicon.state().settings;
       try {
         global.speechSynthesis.cancel();
-        // split long utterances at sentence/clause boundaries to avoid stutter
+        // split long utterances at sentence/clause boundaries to avoid
+        // stutter — but Chrome drops queued utterances after cancel(),
+        // so each part must chain on the previous one's onend
         const parts = String(text).length > 140 ? String(text).split(/(?<=[.!?;,])\s+/) : [text];
         const voice = this.pickVoice(st);
-        for (const part of parts) {
-          if (!String(part).trim()) continue;
-          const u = new SpeechSynthesisUtterance(part.trim());
+        let i = 0;
+        const speakNext = () => {
+          while (i < parts.length && !String(parts[i]).trim()) i++;
+          if (i >= parts.length) return;
+          const u = new SpeechSynthesisUtterance(String(parts[i]).trim());
+          i++;
           u.lang = "en-US";
           u.rate = st.rate || 0.9;
           if (voice) u.voice = voice;
+          u.onend = speakNext;
+          u.onerror = speakNext;
           global.speechSynthesis.speak(u);
-        }
+        };
+        speakNext();
       } catch (e) { /* TTS unavailable */ }
+    },
+
+    /* ---- karaoke scene playback ----
+     * Reads the whole scene sentence aloud in word chunks while the
+     * chunk being spoken is highlighted in the scene display. Fixes
+     * the "only the first word plays" problem AND shows the learner
+     * exactly which word is being read. Falls back to plain
+     * playback when no scene element is on screen. */
+    speakScene(sentence, sceneEl) {
+      const st = Lexicon.state().settings;
+      if (!st.voice) return;
+      const text = String(sentence || "").trim();
+      if (!text) return;
+      try {
+        global.speechSynthesis.cancel();
+        // chunk by clause, then split long clauses into ≤8-word groups
+        const chunks = [];
+        const clauses = text.split(/(?<=[.!?;,])\s+/);
+        for (const c of clauses) {
+          const toks = String(c).match(/[A-Za-z][A-Za-z'-]*/g) || [];
+          if (toks.length > 8) {
+            const words = String(c).split(/\s+/);
+            for (let i = 0; i < words.length; i += 8) chunks.push(words.slice(i, i + 8).join(" "));
+          } else {
+            chunks.push(c);
+          }
+        }
+        const voice = this.pickVoice(st);
+        const spans = sceneEl ? Array.from(sceneEl.querySelectorAll(".scene-word")) : [];
+        const clearHighlight = () => {
+          if (!sceneEl) return;
+          sceneEl.querySelectorAll(".scene-word.speaking").forEach((s) => s.classList.remove("speaking"));
+        };
+        let ci = 0;
+        const speakChunk = () => {
+          if (ci >= chunks.length) { clearHighlight(); return; }
+          const chunk = String(chunks[ci]).trim();
+          ci++;
+          if (!chunk) { speakChunk(); return; }
+          // highlight every scene word present in this chunk
+          if (spans.length) {
+            clearHighlight();
+            const toks = chunk.toLowerCase().match(/[a-z][a-z'-]*/g) || [];
+            for (const sp of spans) {
+              const w = sp.textContent.toLowerCase().replace(/[^a-z'-]/g, "");
+              if (w && toks.indexOf(w) !== -1) sp.classList.add("speaking");
+            }
+          }
+          const u = new SpeechSynthesisUtterance(chunk);
+          u.lang = "en-US";
+          u.rate = st.rate || 0.9;
+          if (voice) u.voice = voice;
+          u.onend = speakChunk;
+          u.onerror = speakChunk;
+          global.speechSynthesis.speak(u);
+        };
+        speakChunk();
+      } catch (e) { this.speakLocal(text); }
     },
 
     /* ================= memory deck ================= */
@@ -1247,11 +1368,13 @@
         // read-only input still lets SPACE replay audio and ENTER advance
         // the phase (fallback when the input loses focus)
         if (e.target && /input|textarea/i.test(e.target.tagName)) {
-          if (!((e.key === " " || e.key === "Enter") && e.target.readOnly)) return;
+          if (!((e.key === " " || e.key === "Enter" || e.key === "ArrowLeft" || e.key === "ArrowRight") && e.target.readOnly)) return;
         }
         if (this.session && this.view === "vocab" && this.vsub === "train") {
           const k = e.key;
-          if (k === "Enter") {
+          if (k === "ArrowLeft") { e.preventDefault(); this.goBack(); }
+          else if (k === "ArrowRight") { e.preventDefault(); this.goNext(); }
+          else if (k === "Enter") {
             e.preventDefault();
             if (this.session.phase === "spell") this.advanceToGap();
             else if (this.session.phase === "gap") this.gapNext();
