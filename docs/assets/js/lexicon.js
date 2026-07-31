@@ -25,6 +25,7 @@
       examDate: "2026-11-15",         // target exam date (YYYY-MM-DD), user-adjustable
       showTrans: true,                // show translations on cards
       voice: true,                    // TTS feedback
+      voiceName: "",                  // preferred TTS voice (empty = auto)
       rate: 0.9                       // speech rate
     },
     stats: {

@@ -629,19 +629,37 @@
     },
 
     /* ================= TTS ================= */
-    speak(word) {
+    /* pick the best available en-US voice: user choice first, then a
+     * quality shortlist, then any en-US voice. Long texts are split
+     * into segments so speech engines do not stutter. */
+    pickVoice(st) {
+      const voices = global.speechSynthesis.getVoices();
+      if (st.voiceName) {
+        const v = voices.find((x) => x.name === st.voiceName);
+        if (v) return v;
+      }
+      return voices.find((x) => x.lang === "en-US" && /google|natural|samantha|aria|zira|daniel|karen|jenny|libby|susan|hazel/i.test(x.name)) ||
+             voices.find((x) => x.lang === "en-US") || null;
+    },
+
+    speak(text) {
       const st = Lexicon.state().settings;
       if (!st.voice) return;
+      const t = String(text || "").trim();
+      if (!t) return;
       try {
         global.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(word);
-        u.lang = "en-US";
-        u.rate = st.rate || 0.9;
-        const voices = global.speechSynthesis.getVoices();
-        const v = voices.find((x) => x.lang === "en-US" && /google|natural|samantha|aria/i.test(x.name)) ||
-                  voices.find((x) => x.lang === "en-US") || null;
-        if (v) u.voice = v;
-        global.speechSynthesis.speak(u);
+        // split long utterances at sentence/clause boundaries to avoid stutter
+        const parts = t.length > 140 ? t.split(/(?<=[.!?;,])\s+/) : [t];
+        const voice = this.pickVoice(st);
+        for (const part of parts) {
+          if (!part.trim()) continue;
+          const u = new SpeechSynthesisUtterance(part.trim());
+          u.lang = "en-US";
+          u.rate = st.rate || 0.9;
+          if (voice) u.voice = voice;
+          global.speechSynthesis.speak(u);
+        }
       } catch (e) { /* TTS unavailable */ }
     },
 
@@ -829,6 +847,24 @@
     },
 
     /* ================= settings ================= */
+    fillVoiceSelect(sel, current) {
+      const fill = () => {
+        const voices = global.speechSynthesis.getVoices();
+        const en = voices.filter((v) => /^en/i.test(v.lang));
+        const others = voices.filter((v) => !/^en/i.test(v.lang));
+        const all = [...en, ...others];
+        sel.innerHTML = '<option value="">AUTO (BEST MATCH)</option>' +
+          all.map((v) => '<option value="' + this.esc(v.name) + '">' + this.esc(v.name) + " (" + v.lang + ")</option>").join("");
+        if (current) sel.value = current;
+        if (!sel.value && en.length) sel.selectedIndex = 1; // highlight first en-US
+      };
+      fill();
+      // voices load asynchronously in some browsers
+      if (global.speechSynthesis && global.speechSynthesis.onvoiceschanged === undefined) {
+        global.speechSynthesis.onvoiceschanged = fill;
+      }
+    },
+
     bindSettings() {
       $("btnSettings").addEventListener("click", () => {
         const s = Lexicon.state().settings;
@@ -837,6 +873,7 @@
         $("cfgTrans").checked = s.showTrans;
         $("cfgVoice").checked = s.voice;
         $("cfgRate").value = s.rate;
+        this.fillVoiceSelect($("cfgVoiceName"), s.voiceName || "");
         $("settingsModal").hidden = false;
       });
       $("btnCfgSave").addEventListener("click", () => {
@@ -845,6 +882,7 @@
         s.examDate = $("cfgExam").value || "2026-11-15";
         s.showTrans = $("cfgTrans").checked;
         s.voice = $("cfgVoice").checked;
+        s.voiceName = $("cfgVoiceName").value || "";
         s.rate = parseFloat($("cfgRate").value) || 0.9;
         Lexicon.saveState();
         $("settingsModal").hidden = true;

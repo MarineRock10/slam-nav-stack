@@ -154,14 +154,21 @@
     speak(text) {
       try {
         global.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = "en-US";
-        u.rate = this._rate || 0.85;
+        const st = global.Lexicon ? Lexicon.state().settings : {};
+        const parts = String(text || "").length > 140 ? String(text).split(/(?<=[.!?;,])\s+/) : [text];
+        let voice = null;
         const voices = global.speechSynthesis.getVoices();
-        const v = voices.find((x) => x.lang === "en-US" && /google|natural|samantha|aria/i.test(x.name)) ||
-                  voices.find((x) => x.lang === "en-US") || null;
-        if (v) u.voice = v;
-        global.speechSynthesis.speak(u);
+        if (st.voiceName) voice = voices.find((x) => x.name === st.voiceName) || null;
+        if (!voice) voice = voices.find((x) => x.lang === "en-US" && /google|natural|samantha|aria|zira|daniel|karen|jenny|libby/i.test(x.name)) || null;
+        if (!voice) voice = voices.find((x) => x.lang === "en-US") || null;
+        for (const part of parts) {
+          if (!String(part).trim()) continue;
+          const u = new SpeechSynthesisUtterance(part.trim());
+          u.lang = "en-US";
+          u.rate = this._rate || st.rate || 0.85;
+          if (voice) u.voice = voice;
+          global.speechSynthesis.speak(u);
+        }
       } catch (e) { /* TTS unavailable */ }
     },
 
