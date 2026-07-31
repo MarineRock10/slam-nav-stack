@@ -343,8 +343,8 @@
         '<div class="card sense-card">' +
         '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
         " · WORD " + (s.wi + 1) + "/" + groupLen + (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
-        '<span class="card-status learn">SENSE SCENE</span>' +
-        '<div class="sense-label">SEE THE WORD IN ACTION — A REAL SCENE</div>' +
+        '<span class="card-status learn">SCENE LISTENING</span>' +
+        '<div class="sense-label">STAGE 1 · LISTEN TO THE SCENE — SEE THE WORD IN ACTION</div>' +
         (sceneHtml || '<div class="card-def big">' + this.esc(mainDef) + "</div>") +
         '<div class="card-def" style="margin-top:10px">' + this.esc(mainDef) + "</div>" +
         (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
@@ -373,19 +373,28 @@
       const ent = item.ent;
       const groupLen = s.groups[s.gi].length;
       this._hint = 0;
+      const senses = Lexicon.senses(item.key);
+      const mainDef = (senses[0] && senses[0].text) || ent.d || ent.t || "";
+      const zhDef = Lexicon.state().settings.showTrans && ent.t ? ent.t : "";
+      const wordLen = ent.w.length;
+      const blankLen = "_".repeat(wordLen);
       $("cardStage").innerHTML =
         '<div class="card sense-card typing-card">' +
         '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
         " · WORD " + (s.wi + 1) + "/" + groupLen + "</span>" +
-        '<span class="card-status learn">SPELL</span>' +
-        '<div class="sense-label">TYPE THE WORD — FROM AUDIO & MEANING</div>' +
+        '<span class="card-status learn">WORD SPELLING</span>' +
+        '<div class="sense-label">STAGE 2 · HEAR THE WORD — SPELL WITH HINTS</div>' +
+        (mainDef ? '<div class="card-def" style="font-size:14px">' + this.esc(mainDef) + "</div>" : "") +
+        (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
+        '<div class="card-tts"><button class="tts-btn" id="btnWord2">◉ PLAY WORD</button></div>' +
+        '<div class="spell-hint" id="spellHint">' + blankLen + "</div>" +
         '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
         '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD...">' +
         "</div>" +
         '<div class="typing-feedback" id="typingFeedback"></div>' +
-        '<div class="spell-hint" id="spellHint"></div>' +
-        '<div class="card-index">ENTER CHECK · SPACE RE-HEAR · WRONG SPELLING REVEALS LETTERS</div>' +
+        '<div class="card-index">WORD LENGTH SHOWN · ENTER CHECK · SPACE RE-HEAR</div>' +
         "</div>";
+      $("btnWord2").addEventListener("click", () => this.speak(ent.w));
       const input = $("typingInput");
       input.focus();
       input.addEventListener("keydown", (e) => {
@@ -457,7 +466,7 @@
         '<div class="card sense-card typing-card">' +
         '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
         " · WORD " + (s.wi + 1) + "/" + groupLen + "</span>" +
-        '<span class="card-status learn">GAP-FILL</span>' +
+        '<span class="card-status learn">SCENE SPELLING</span>' +
         '<div class="sense-label">SECOND PASS — FILL THE GAP (' + (this._gapIdx + 1) + "/" + this._gaps.length + ")</div>" +
         '<div class="card-example big">“' + this.esc(blanked) + '”</div>' +
         '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
