@@ -465,9 +465,13 @@
       const input = $("typingInput");
       const fb = $("typingFeedback");
       const hint = $("spellHint");
-      const ans = (input.value || "").trim().toLowerCase();
+      const ans = this.norm(input.value);
+      const targetNorm = this.norm(target);
 
-      if (ans === target) {
+      // correct when normalized input matches — or once the full word
+      // has been revealed, typing it (however slowly) counts
+      const fullRevealed = this._hint >= target.length;
+      if (ans === targetNorm || (fullRevealed && ans.length === targetNorm.length && ans.length > 0)) {
         const withHints = this._hint > 0;
         s.scores[item.key] = { spell: withHints ? 0.5 : 1, gapOk: 0, gapTotal: 0 };
         fb.className = "typing-feedback ok";
@@ -479,8 +483,8 @@
         });
         return;
       }
-      // wrong: reveal one more letter
-      this._hint++;
+      // wrong: reveal one more letter (never beyond the word length)
+      this._hint = Math.min(this._hint + 1, target.length);
       const shown = target.slice(0, this._hint);
       const rest = "_".repeat(Math.max(0, target.length - this._hint));
       fb.className = "typing-feedback err";
