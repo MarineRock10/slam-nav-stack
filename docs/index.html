@@ -31,6 +31,7 @@
     <button class="tab active" data-view="map">FIELD MAP</button>
     <button class="tab" data-view="console">MISSION CONSOLE</button>
     <button class="tab" data-view="log">SENSOR LOG</button>
+    <button class="tab" data-view="suite">ASSESSMENT SUITE</button>
     <span class="tabs-spacer"></span>
     <button class="tab tab-icon" id="btnSettings" title="SYSTEM CONFIG">⚙ CONFIG</button>
   </nav>
@@ -140,7 +141,12 @@
     </section>
   </main>
 
-  <!-- ==================== SETTINGS MODAL ==================== -->
+    <!-- ==================== VIEW 4: ASSESSMENT SUITE ==================== -->
+    <section id="view-suite" class="view">
+      <div id="suiteContainer" class="panel"></div>
+    </section>
+
+    <!-- ==================== SETTINGS MODAL ==================== -->
   <div class="modal-backdrop" id="settingsModal" hidden>
     <div class="modal">
       <div class="panel-title"><span class="pt-dot"></span>SYSTEM CONFIG</div>
@@ -188,6 +194,15 @@
 <script src="assets/js/srs.js"></script>
 <script src="assets/js/lexicon.js"></script>
 <script src="assets/js/telemetry.js"></script>
+<script src="assets/js/suite/data-listening.js"></script>
+<script src="assets/js/suite/data-listening-full.js"></script>
+<script src="assets/js/suite/data-reading.js"></script>
+<script src="assets/js/suite/data-writing.js"></script>
+<script src="assets/js/suite/suite.js"></script>
+<script src="assets/js/suite/listening.js"></script>
+<script src="assets/js/suite/listening-full.js"></script>
+<script src="assets/js/suite/reading.js"></script>
+<script src="assets/js/suite/writing.js"></script>
 <script src="assets/js/main.js"></script>
 </body>
 </html>

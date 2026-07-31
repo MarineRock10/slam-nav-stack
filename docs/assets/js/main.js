@@ -20,6 +20,16 @@
  *    (backup JSON or any CSV/JSON word list).
  * 5. Ctrl+Shift+M toggles PLAIN MODE (light, clean theme) for
  *    home / phone use. Nothing else changes.
+ * 6. ASSESSMENT SUITE tab = full IELTS practice:
+ *    - ACOUSTIC TELEMETRY: Quick Drills (sentence level) and
+ *      Full Sections (whole transcripts, TTS playback).
+ *    - SENSOR DATA PARSING: 5 academic reading tests, 15
+ *      passages, 8 question types (TFNG/YNNG/MC/matching/...).
+ *    - MISSION REPORT: writing tasks + band phrase bank +
+ *      self-assessment checklist (drafts saved locally).
+ *    Content: ielts-ai-dataset (CC BY 4.0, see data headers).
+ *    Completed exercises count toward the daily streak and are
+ *    stored per module in localStorage.
  * ──────────────────────────────────────────────────────────────
  * ============================================================ */
 (function (global) {
@@ -35,6 +45,11 @@
     /* ================= init ================= */
     init() {
       Lexicon.load();
+      // wire suite module progress reporting
+      global.Listening.onProgress = Suite.record.bind(Suite);
+      global.ListeningFull.onProgress = Suite.record.bind(Suite);
+      global.Reading.onProgress = Suite.record.bind(Suite);
+      global.Writing.onProgress = Suite.record.bind(Suite);
       this.bindTabs();
       this.bindActions();
       this.bindSettings();
@@ -60,6 +75,7 @@
         sec.classList.toggle("active", sec.id === "view-" + v));
       if (v === "map") { this.renderAll(); Telemetry.drawChart($("chartCanvas")); }
       if (v === "log") this.renderLog();
+      if (v === "suite") Suite.render($("suiteContainer"));
       if (v === "console" && !this.session) this.renderIdleConsole();
     },
 
