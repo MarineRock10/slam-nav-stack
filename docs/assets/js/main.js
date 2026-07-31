@@ -426,8 +426,11 @@
         } else {
           t.listenOk = false;
           fb.className = "typing-feedback err";
-          fb.textContent = "✗ " + t.item.ent.w + " — PRESS ENTER TO CONTINUE";
+          fb.innerHTML = "✗ " + this.esc(t.item.ent.w) +
+            ' — <button class="tts-btn" id="btnHearAgain">◉ HEAR AGAIN</button> PRESS ENTER TO CONTINUE';
           input.readOnly = true;
+          const ha = $("btnHearAgain");
+          if (ha) ha.addEventListener("click", () => this.speak(t.item.ent.w));
         }
         return;
       }
@@ -446,8 +449,11 @@
         t.listenDone = true;
         t.listenOk = false;
         fb.className = "typing-feedback err";
-        fb.textContent = "✗ " + t.item.ent.w + " — PRESS ENTER TO CONTINUE";
+        fb.innerHTML = "✗ " + this.esc(t.item.ent.w) +
+          ' — <button class="tts-btn" id="btnHearAgain">◉ HEAR AGAIN</button> PRESS ENTER TO CONTINUE';
         $("typingInput").readOnly = true;
+        const ha = $("btnHearAgain");
+        if (ha) ha.addEventListener("click", () => this.speak(t.item.ent.w));
       } else {
         this.grade(0);
       }
@@ -798,7 +804,12 @@
           this.togglePlain();
           return;
         }
-        if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+        // typing in an editable field must not trigger shortcuts — but a
+        // read-only input (after a wrong spelling) still lets SPACE
+        // replay the word audio before continuing
+        if (e.target && /input|textarea/i.test(e.target.tagName)) {
+          if (!(e.key === " " && e.target.readOnly)) return;
+        }
         if (this.session && this.view === "vocab" && this.vsub === "train") {
           const k = e.key;
           if (k === "1") this.senseGrade(0);
