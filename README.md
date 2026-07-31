@@ -1,10 +1,11 @@
 # slam-nav-stack
 
+> 🖥️ **Live web console**: https://marinerock10.github.io/slam-nav-stack/
+
 [![ROS2](https://img.shields.io/badge/ROS2-Humble-blue)](https://docs.ros.org/en/humble/)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
-[![Live Console](https://img.shields.io/badge/console-live-35c8e8)](https://marinerock10.github.io/slam-nav-stack/)
-[![Pages](https://img.shields.io/badge/docs-GitHub%20Pages-35c8e8)](https://pages.github.com/)
+[![Console](https://img.shields.io/badge/open-console-35c8e8)](https://marinerock10.github.io/slam-nav-stack/)
 
 Graph-based **SLAM** (Simultaneous Localization and Mapping) and **waypoint
 navigation** stack for 2D LiDAR field robots. Maintains a global pose-graph
