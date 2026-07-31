@@ -386,7 +386,9 @@
         '<div class="sense-label">STAGE 2 · HEAR THE WORD — SPELL WITH HINTS</div>' +
         (mainDef ? '<div class="card-def" style="font-size:14px">' + this.esc(mainDef) + "</div>" : "") +
         (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
-        '<div class="card-tts"><button class="tts-btn" id="btnWord2">◉ PLAY WORD</button></div>' +
+        '<div class="card-tts">' +
+        '<button class="tts-btn" id="btnWord2">◉ PLAY WORD</button> ' +
+        '<button class="tts-btn" id="btnScene2">◉ PLAY SCENE</button></div>' +
         '<div class="spell-hint" id="spellHint">' + blankLen + "</div>" +
         '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
         '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD...">' +
@@ -394,7 +396,9 @@
         '<div class="typing-feedback" id="typingFeedback"></div>' +
         '<div class="card-index">WORD LENGTH SHOWN · ENTER CHECK · SPACE RE-HEAR</div>' +
         "</div>";
+      const sceneSents = Lexicon.exampleSentences(item.key, 1);
       $("btnWord2").addEventListener("click", () => this.speak(ent.w));
+      $("btnScene2").addEventListener("click", () => this.speak(sceneSents[0] || ent.w));
       const input = $("typingInput");
       input.focus();
       input.addEventListener("keydown", (e) => {
