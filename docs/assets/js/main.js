@@ -119,6 +119,8 @@
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const daysLeft = Math.max(0, Math.ceil((exam - today) / DAY));
+
+
       $("stExam").textContent = daysLeft + "D";
       $("stExamDate").textContent = "TARGET " + st.settings.examDate;
 
@@ -130,6 +132,30 @@
         if (c.added && now - c.added < DAY) newToday++;
       }
       const goal = st.settings.goal;
+      // ---- DDL pace: recommended daily goal + ahead/behind estimate ----
+      // (goal is declared below, reused here)
+      // core deck = curated core words (priority 0) + what is already learned
+      let coreTotal = 0;
+      Lexicon.load().forEach((ent) => { if (ent.p === 0) coreTotal++; });
+      coreTotal = Math.max(coreTotal, learned);
+      const remaining = Math.max(0, coreTotal - learned);
+      const suggestGoal = daysLeft > 0 ? Math.max(1, Math.ceil(remaining / daysLeft)) : 1;
+      // first study day from the earliest card, for an expected-progress baseline
+      let firstDay = null;
+      const allCards = Lexicon.cards();
+      for (const k in allCards) {
+        const a = allCards[k].added;
+        if (a && (!firstDay || a < firstDay)) firstDay = a;
+      }
+      const totalDays = firstDay ? Math.max(1, Math.ceil((exam - firstDay) / DAY)) : Math.max(1, daysLeft);
+      const elapsedDays = firstDay ? Math.max(0, totalDays - daysLeft) : 0;
+      const expected = elapsedDays * goal;
+      const diff = learned - expected;
+      const paceDays = goal ? diff / goal : 0;
+      $("stPace").textContent = paceDays >= 0
+        ? "AHEAD +" + paceDays.toFixed(1) + "D"
+        : "BEHIND " + Math.abs(paceDays).toFixed(1) + "D";
+      $("stPaceSub").textContent = "SUGGESTED " + suggestGoal + "/DAY · " + remaining + " CORE LEFT";
       const todayKey = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, "0") + "-" + String(new Date().getDate()).padStart(2, "0");
       const hist = (st.stats.history || {})[todayKey] || { n: 0, r: 0, p: 0 };
       const todayTotal = (hist.n || 0) + (hist.r || 0) + (hist.p || 0);
@@ -919,6 +945,16 @@
         $("cfgVoice").checked = s.voice;
         $("cfgRate").value = s.rate;
         this.fillVoiceSelect($("cfgVoiceName"), s.voiceName || "");
+        const hint = $("cfgGoalHint");
+        if (hint) {
+          const d = new Date(s.examDate + "T00:00:00");
+          const dl = Math.max(0, Math.ceil((d - new Date()) / DAY));
+          let core = 0;
+          Lexicon.load().forEach((ent) => { if (ent.p === 0) core++; });
+          const learned = Object.keys(Lexicon.cards()).length;
+          const sg = dl > 0 ? Math.max(1, Math.ceil(Math.max(0, core - learned) / dl)) : 1;
+          hint.textContent = "DDL SUGGESTS " + sg + " NEW WORDS/DAY (" + dl + " DAYS LEFT, " + Math.max(0, core - learned) + " CORE WORDS REMAINING)";
+        }
         $("settingsModal").hidden = false;
       });
       $("btnCfgSave").addEventListener("click", () => {

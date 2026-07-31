@@ -81,6 +81,11 @@
                 <div class="stat-value" id="stStreak">0</div>
                 <div class="stat-sub" id="stStreakSub">CONSECUTIVE DAYS</div>
               </div>
+              <div class="stat stat-wide">
+                <div class="stat-label">DDL PACE</div>
+                <div class="stat-value" id="stPace" style="font-size:16px">--</div>
+                <div class="stat-sub" id="stPaceSub">--</div>
+              </div>
             </div>
             <div class="statbar-wrap">
               <div class="statbar-label"><span id="stLblCover">VOCAB COVERAGE</span><span id="stCoverage">0%</span></div>
@@ -200,6 +205,7 @@
       <div class="form-row">
         <label for="cfgGoal">DAILY NEW-WORD TARGET</label>
         <input type="number" id="cfgGoal" class="input" min="1" max="500" value="25">
+        <div class="cfg-hint" id="cfgGoalHint"></div>
       </div>
       <div class="form-row">
         <label for="cfgExam">MISSION DEADLINE (YYYY-MM-DD)</label>
