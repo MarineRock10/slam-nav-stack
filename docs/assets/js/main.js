@@ -467,7 +467,7 @@
         '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
         " · WORD " + (s.wi + 1) + "/" + groupLen + "</span>" +
         '<span class="card-status learn">SCENE SPELLING</span>' +
-        '<div class="sense-label">SECOND PASS — FILL THE GAP (' + (this._gapIdx + 1) + "/" + this._gaps.length + ")</div>" +
+        '<div class="sense-label">STAGE 3 · LISTEN TO THE SCENE — SPELL IT IN CONTEXT (' + (this._gapIdx + 1) + "/" + this._gaps.length + ")</div>" +
         '<div class="card-example big">“' + this.esc(blanked) + '”</div>' +
         '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
         '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="FILL THE WORD...">' +
