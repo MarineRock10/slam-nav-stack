@@ -102,6 +102,29 @@
     /* ================= statistics ================= */
     stView: "all",   // "all" | "today"
 
+    /* DDL-driven metrics: remaining days, core deck size, suggested
+     * daily goal so the learner reaches the exam deadline on time. */
+    ddlMetrics() {
+      const st = Lexicon.state();
+      const exam = new Date(st.settings.examDate + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const daysLeft = Math.max(0, Math.ceil((exam - today) / DAY));
+      let coreTotal = 0;
+      Lexicon.load().forEach((ent) => { if (ent.p === 0) coreTotal++; });
+      const learned = Object.keys(Lexicon.cards()).length;
+      coreTotal = Math.max(coreTotal, learned);
+      const remaining = Math.max(0, coreTotal - learned);
+      const suggestGoal = daysLeft > 0 ? Math.max(1, Math.ceil(remaining / daysLeft)) : 1;
+      return { daysLeft, coreTotal, learned, remaining, suggestGoal };
+    },
+
+    /* effective daily goal: auto-follows DDL unless the user pinned it */
+    effectiveGoal(st) {
+      const s = st || Lexicon.state();
+      return s.settings.goalAuto ? this.ddlMetrics().suggestGoal : s.settings.goal;
+    },
+
     renderAll() {
       this.renderStats();
       this.renderStages();
@@ -133,14 +156,8 @@
       }
       const goal = st.settings.goal;
       // ---- DDL pace: recommended daily goal + ahead/behind estimate ----
-      // (goal is declared below, reused here)
-      // core deck = curated core words (priority 0) + what is already learned
-      let coreTotal = 0;
-      Lexicon.load().forEach((ent) => { if (ent.p === 0) coreTotal++; });
-      coreTotal = Math.max(coreTotal, learned);
-      const remaining = Math.max(0, coreTotal - learned);
-      const suggestGoal = daysLeft > 0 ? Math.max(1, Math.ceil(remaining / daysLeft)) : 1;
-      // first study day from the earliest card, for an expected-progress baseline
+      const m = this.ddlMetrics();
+      const remaining = m.remaining, suggestGoal = m.suggestGoal;
       let firstDay = null;
       const allCards = Lexicon.cards();
       for (const k in allCards) {
@@ -163,7 +180,8 @@
       if (this.stView === "today") {
         // ---- TODAY view: composite progress across all factors ----
         // new words 60% · reviews 25% · practice 15%
-        const newScore = Math.min(newToday / goal, 1) * 60;
+        const effGoal = this.effectiveGoal(st);
+        const newScore = Math.min(newToday / effGoal, 1) * 60;
         const revScore = Math.min((hist.r || 0) / Math.max(1, Math.round(goal * 0.5)), 1) * 25;
         const pracScore = Math.min((hist.p || 0) / 2, 1) * 15;
         const totalPct = Math.round(newScore + revScore + pracScore);
@@ -188,8 +206,9 @@
         $("stLblDue").textContent = "REVIEWS DUE";
         $("stLblStreak").textContent = "STREAK";
         $("stLblCover").textContent = "VOCAB COVERAGE";
-        $("stToday").textContent = newToday + "/" + goal;
-        $("stTodayPct").textContent = Math.min(100, Math.round((newToday / goal) * 100)) + "%";
+        const effGoal = this.effectiveGoal(st);
+        $("stToday").textContent = newToday + "/" + effGoal;
+        $("stTodayPct").textContent = Math.min(100, Math.round((newToday / effGoal) * 100)) + "%";
         $("stDue").textContent = counts.due;
         $("stDueSub").textContent = counts.due ? "QUEUED FOR REVIEW" : "ALL CLEAR";
         $("stStreak").textContent = st.stats.streak;
@@ -257,7 +276,7 @@
       fresh.forEach((n) => queue.push({ key: n.key, ent: n.ent, card: null, isNew: true, hot: true }));
       // 3) regular new words up to the daily target (minus reserved slots),
       //    shuffled so the study order is not alphabetical
-      const newWords = Lexicon.newCandidates(st.settings.goal, 0, fresh.length);
+      const newWords = Lexicon.newCandidates(this.effectiveGoal(st), 0, fresh.length);
       for (let i = newWords.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         const tmp = newWords[i];
@@ -945,20 +964,24 @@
         $("cfgVoice").checked = s.voice;
         $("cfgRate").value = s.rate;
         this.fillVoiceSelect($("cfgVoiceName"), s.voiceName || "");
+        $("cfgGoalAuto").checked = !!s.goalAuto;
+        const m = this.ddlMetrics();
         const hint = $("cfgGoalHint");
         if (hint) {
-          const d = new Date(s.examDate + "T00:00:00");
-          const dl = Math.max(0, Math.ceil((d - new Date()) / DAY));
-          let core = 0;
-          Lexicon.load().forEach((ent) => { if (ent.p === 0) core++; });
-          const learned = Object.keys(Lexicon.cards()).length;
-          const sg = dl > 0 ? Math.max(1, Math.ceil(Math.max(0, core - learned) / dl)) : 1;
-          hint.textContent = "DDL SUGGESTS " + sg + " NEW WORDS/DAY (" + dl + " DAYS LEFT, " + Math.max(0, core - learned) + " CORE WORDS REMAINING)";
+          hint.textContent = "DDL SUGGESTS " + m.suggestGoal + " NEW WORDS/DAY (" + m.daysLeft + " DAYS LEFT, " + m.remaining + " CORE WORDS REMAINING)";
         }
+        const syncGoal = () => {
+          const auto = $("cfgGoalAuto").checked;
+          $("cfgGoal").disabled = auto;
+          if (auto) $("cfgGoal").value = m.suggestGoal;
+        };
+        $("cfgGoalAuto").onchange = syncGoal;
+        syncGoal();
         $("settingsModal").hidden = false;
       });
       $("btnCfgSave").addEventListener("click", () => {
         const s = Lexicon.state().settings;
+        s.goalAuto = $("cfgGoalAuto").checked;
         s.goal = Math.max(1, Math.min(500, parseInt($("cfgGoal").value, 10) || 25));
         s.examDate = $("cfgExam").value || "2026-11-15";
         s.showTrans = $("cfgTrans").checked;

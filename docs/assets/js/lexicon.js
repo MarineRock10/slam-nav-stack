@@ -22,6 +22,7 @@
   const DEFAULT_STATE = {
     settings: {
       goal: 25,                       // daily new-word target
+      goalAuto: true,                 // auto-follow the DDL suggestion
       examDate: "2026-11-15",         // target exam date (YYYY-MM-DD), user-adjustable
       showTrans: true,                // show translations on cards
       voice: true,                    // TTS feedback
