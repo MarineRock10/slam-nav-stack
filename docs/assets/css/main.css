@@ -723,6 +723,25 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 }
 .sense-text { color: var(--fg); }
 .sense-ex { color: var(--fg-dim); font-style: italic; font-size: 12px; margin-top: 3px; width: 100%; }
+.sense-en { color: var(--fg); flex: 1; }
+.sense-zh { color: var(--fg-dim); }
+.sense-word-block {
+  text-align: left;
+  padding: 8px 12px;
+  margin: 6px auto;
+  max-width: 560px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--bg-panel2);
+}
+.sense-word {
+  display: block;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 2px;
+  letter-spacing: 0.03em;
+}
 .card-example.big { font-size: 16px; line-height: 1.7; padding: 10px 0; }
 .step-bar { margin-top: 14px; }
 

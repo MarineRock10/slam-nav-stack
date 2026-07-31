@@ -88,6 +88,23 @@
         ent.e = core[k].e || "";
         if (ent.p > 0) ent.p = 0;
       }
+      // English sense definitions (4000 EEW / WordNet) fill gaps:
+      // curated core-vocab definitions above always win.
+      const defs = global.IELTS_DEFS || {};
+      for (const k in defs) {
+        const ent = this.get(k);
+        if (!ent) continue;
+        if (!ent.d && defs[k].d) ent.d = defs[k].d;
+        if (!ent.e && defs[k].e) ent.e = defs[k].e;
+      }
+      // AI-authored definitions cover every remaining word (full coverage)
+      const gen = global.IELTS_DEFS_GEN || {};
+      for (const k in gen) {
+        const ent = this.get(k);
+        if (!ent) continue;
+        if (!ent.d && gen[k][0]) ent.d = gen[k][0];
+        if (!ent.e && gen[k][1]) ent.e = gen[k][1];
+      }
       // custom user entries override everything
       const custom = this.getCustom();
       for (const k in custom) {
@@ -185,6 +202,21 @@
       ((g.LISTENING_SETS || [])).forEach((s) =>
         s.items.forEach((i) => addSentence(i.audio || i.q || "")));
       ((g.WRITING_TASKS || [])).forEach((t) => addSentence(t.prompt));
+      // English definition/example sentences (4000 EEW etc.) fill
+      // words the practice corpus never mentions — corpus stays first
+      const defs = g.IELTS_DEFS || {};
+      for (const k in defs) {
+        if (defs[k].e) addSentence(defs[k].e);
+        if (defs[k].d) addSentence(defs[k].d);
+      }
+      // AI-authored example sentences complete the coverage
+      const gen = g.IELTS_DEFS_GEN || {};
+      for (const k in gen) {
+        if (gen[k][1]) addSentence(gen[k][1]);
+      }
+      // curated example sentences
+      const core = g.CORE_VOCAB || {};
+      for (const k in core) if (core[k].e) addSentence(core[k].e);
       return idx;
     },
 
@@ -200,7 +232,9 @@
       return s;
     },
 
-    /* up to `limit` real sentences containing the word (any inflection) */
+    /* up to `limit` real sentences containing the word (any inflection).
+     * Falls back to the word's curated/EEW example, then its English
+     * definition sentence, so every word can be studied in context. */
     exampleSentences(word, limit) {
       const idx = this.buildExampleIndex();
       const key = this.stem(String(word).toLowerCase());
@@ -210,7 +244,54 @@
         if (re.test(s)) out.push(s);
         if (out.length >= (limit || 2)) break;
       }
+      if (!out.length) {
+        const ent = this.get(word);
+        if (ent && ent.e) out.push(ent.e);
+        else if (ent && ent.d) out.push(ent.d);
+      }
       return out;
+    },
+
+    /* ---- sentence bank (句表) ----
+     * Reverse index: every sentence in the example corpus (practice
+     * passages + English definition/example sentences) mapped to the
+     * study words it contains, so daily groups can be built around
+     * one scene that carries several words at once. */
+    _bank: null,
+    buildSentenceBank() {
+      if (this._bank) return this._bank;
+      const idx = this.buildExampleIndex();
+      const sents = [];
+      const seen = new Set();
+      for (const k in idx) {
+        for (const s of idx[k]) {
+          if (!seen.has(s)) { seen.add(s); sents.push(s); }
+        }
+      }
+      // stem -> word keys (only words of the study lexicon)
+      const stemMap = {};
+      for (const key of this.load().keys()) {
+        const st = this.stem(key);
+        if (st.length < 3) continue;
+        (stemMap[st] = stemMap[st] || []).push(key);
+      }
+      const bank = [];
+      for (const s of sents) {
+        const toks = s.match(/[A-Za-z][A-Za-z'-]*/g) || [];
+        const keys = new Set();
+        const lower = s.toLowerCase();
+        for (const t of toks) {
+          const ws = stemMap[this.stem(t.toLowerCase())];
+          if (!ws) continue;
+          for (const w of ws) {
+            if (w.length >= 3 && lower.includes(w.toLowerCase())) keys.add(w);
+          }
+        }
+        if (keys.size >= 2) bank.push({ s: s, words: Array.from(keys) });
+      }
+      bank.sort((a, b) => b.words.length - a.words.length);
+      this._bank = bank;
+      return bank;
     },
 
     escapeRegExp(s) {
@@ -227,30 +308,46 @@
     /* ---- sense decomposition ----
      * Splits a word's translation into structured senses so the
      * learner studies meaning in context rather than rote lists.
-     * sense = { pos: part-of-speech tag, text: meaning, ex: example }
-     * Curated core words contribute an English definition + example. */
+     * sense = { pos, zh, en, ex } — Chinese meaning from the list,
+     * English gloss paired per-sense when the data allows (curated
+     * multi-part definitions, WordNet gloss order), else attached
+     * to the first sense and visible as the word-level EN line. */
     _POS_RE: /^(n|v|vt|vi|adj|adv|prep|conj|art|pron|num|aux|int|abbr)\./i,
     senses(word) {
       const ent = this.get(word);
       if (!ent) return [];
-      const out = [];
       const parts = String(ent.t || "").split(/[；;]/).map((s) => s.trim()).filter(Boolean);
       const posOf = (s) => {
         const m = s.match(this._POS_RE);
         return m ? m[1].toUpperCase() : "";
       };
-      if (ent.d) {
-        out.push({ pos: parts.length ? posOf(parts[0]) : "", text: ent.d, ex: ent.e || "" });
-        // remaining senses from the Chinese translation (skip the part already covered by d)
-        for (let i = 1; i < parts.length; i++) {
-          const t = parts[i].replace(this._POS_RE, "").trim();
-          if (t) out.push({ pos: posOf(parts[i]), text: t, ex: "" });
+      const enParts = String(ent.d || "").split(/[；;]/).map((s) => s.trim()).filter(Boolean);
+      const out = [];
+      if (!parts.length) {
+        return [{ pos: "", zh: "", en: enParts[0] || "", ex: ent.e || "" }];
+      }
+      // POS buckets for fallback alignment when counts differ
+      const enByPos = {};
+      for (const p of enParts) {
+        const pos = posOf(p);
+        (enByPos[pos] = enByPos[pos] || []).push(p.replace(this._POS_RE, "").trim() || p);
+      }
+      let used = 0;
+      for (let i = 0; i < parts.length; i++) {
+        const pos = posOf(parts[i]);
+        const zh = parts[i].replace(this._POS_RE, "").trim();
+        let en = "";
+        if (enParts.length === parts.length) {
+          en = enParts[i].replace(this._POS_RE, "").trim();
+        } else if (enParts.length === 1) {
+          if (i === 0) en = enParts[0];
+        } else if (pos && enByPos[pos] && enByPos[pos].length) {
+          en = enByPos[pos].shift();
+        } else if (used < enParts.length) {
+          en = enParts[used].replace(this._POS_RE, "").trim();
+          used++;
         }
-      } else {
-        for (const part of parts) {
-          const t = part.replace(this._POS_RE, "").trim();
-          if (t) out.push({ pos: posOf(part), text: t, ex: "" });
-        }
+        out.push({ pos, zh, en, ex: i === 0 ? (ent.e || "") : "" });
       }
       return out;
     },

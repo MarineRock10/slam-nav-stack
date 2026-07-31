@@ -304,22 +304,14 @@
       // 2) flagged words never studied yet — priority new items
       const fresh = Lexicon.unfamiliarFresh();
       fresh.forEach((n) => queue.push({ key: n.key, ent: n.ent, card: null, isNew: true, hot: true }));
-      // 3) regular new words up to the daily target (minus reserved slots),
-      //    shuffled so the study order is not alphabetical
-      const newWords = Lexicon.newCandidates(this.effectiveGoal(st), 0, fresh.length);
-      for (let i = newWords.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const tmp = newWords[i];
-        newWords[i] = newWords[j];
-        newWords[j] = tmp;
-      }
-      newWords.forEach((n) => queue.push({ key: n.key, ent: n.ent, card: Lexicon.getCard(n.key), isNew: true, hot: false }));
+      // 3) regular new words are chosen BY buildGroups from the
+      //    sentence bank (句表), capped by the DDL-derived goal
       return queue;
     },
 
     startSession(reviewOnly) {
       const queue = this.buildQueue(reviewOnly);
-      const groups = this.groupQueue(queue);
+      const groups = this.buildGroups(queue);
       this.session = {
         queue, groups, gi: 0, wi: 0, phase: "meaning",
         scores: {}, newDone: 0, revDone: 0, failed: 0,
@@ -348,32 +340,139 @@
       $("trainActions").style.display = "";
     },
 
-    /* ---- group-based learning flow ----
-     * Words are grouped (different first letters per group) and each
-     * word runs: LISTEN & MEANING -> SPELL (letter-by-letter hints
-     * until written) -> GAP-FILL in real sentences. The word's
-     * overall success rate decides which memory-curve stage it
-     * enters (no manual self-grading). */
-    groupQueue(queue, size = 4) {
+    /* ---- sentence-based daily mix (句表) ----
+     * Step 1: must-study words (due reviews + flagged) are bound to
+     * the sentence that carries the most other unused targets.
+     * Step 2: the remaining DDL new-word budget is filled BY THE
+     * SENTENCES — the scene with the most unstudied words wins, so
+     * every group is a real multi-word context instead of random
+     * words that never meet in a sentence.
+     * Step 3: leftover budget tops up with core-first words that no
+     * sentence covers (they study meaning + spelling only). */
+    /* ---- sentence scoring (句表打分) ----
+     * A scene sentence's value = Σ (word state value × difficulty
+     * × weakness factor) × scene coefficient.
+     *  · state value (learning curve): hot-zone 10 · due review 7
+     *    · new word 5 · learning-not-due 1 · mastered-not-due 0
+     *  · difficulty: long word (≥10 chars) ×1.15 · many senses (≥3)
+     *    ×1.1 · supplement-tier list (p=2) ×1.05
+     *  · weakness: one historical AGAIN ×1.1 (≥2 auto-flags the
+     *    word into the hot zone, which already caps the value)
+     *  · scene coefficient: sentence 20–140 chars ×1.1 (real
+     *    context worth more than a fragment)
+     * Practice flags (dbl-click unknown words) raise the state
+     * value to 10, so those words pull their sentences to the top
+     * of the daily queue. */
+    sceneScore(sentence, items) {
+      let s = 0;
+      for (const it of items) {
+        let v = this.targetValue(it.key);
+        const ent = it.ent;
+        let diff = 1;
+        if (ent && ent.w && ent.w.length >= 10) diff *= 1.15;
+        if (Lexicon.senses(it.key).length >= 3) diff *= 1.1;
+        if (ent && ent.p === 2) diff *= 1.05;
+        if (it.card && it.card.weak === 1) diff *= 1.1;
+        s += Math.round(v * diff);
+      }
+      if (sentence && sentence.length >= 20 && sentence.length <= 140) {
+        s = Math.round(s * 1.1);
+      }
+      return s;
+    },
+    targetValue(key) {
+      if (Lexicon.isUnfamiliar(key)) return 10;
+      const card = Lexicon.getCard(key);
+      if (!card || card.lvl === 0) return 5;
+      if (card.due <= Date.now()) return 7;
+      return 1;
+    },
+    buildGroups(queue, reviewOnly, size = 4) {
+      const bank = Lexicon.buildSentenceBank();
+      const targetMap = new Map(queue.map((t) => [t.key, t]));
+      const used = new Set();
       const groups = [];
-      const q = queue.slice();
-      while (q.length) {
-        const g = [];
-        const used = new Set();
-        for (let i = 0; i < q.length && g.length < size; i++) {
-          const it = q[i];
-          const f = String(it.key)[0];
-          if (!used.has(f)) { used.add(f); g.push(it); q.splice(i, 1); i--; }
+      // 1) bind must-study words in priority order — the sentence
+      //    carrying the highest learning-curve VALUE wins
+      for (const t of queue) {
+        if (used.has(t.key)) continue;
+        let best = null, bestHits = 0, bestVal = 0;
+        for (const b of bank) {
+          if (b.words.indexOf(t.key) === -1) continue;
+          let hits = 0, val = 0;
+          for (const w of b.words) {
+            if (!used.has(w) && targetMap.has(w)) { hits++; val += this.targetValue(w); }
+          }
+          if (hits >= 2 && (val > bestVal || (val === bestVal && hits > bestHits))) {
+            best = b; bestHits = hits; bestVal = val;
+          }
         }
-        if (g.length < size && q.length) g.push(q.shift());
-        groups.push(g);
+        if (best && bestHits >= 2) {
+          const pick = [];
+          for (const x of queue) {
+            if (used.has(x.key) || best.words.indexOf(x.key) === -1) continue;
+            used.add(x.key);
+            pick.push(x);
+            if (pick.length >= size) break;
+          }
+          groups.push({ scene: best.s, words: pick });
+        } else {
+          used.add(t.key);
+          groups.push({ scene: null, words: [t] });
+        }
+      }
+      // 2) new words — the sentences decide which words today
+      if (!reviewOnly) {
+        const st = Lexicon.state();
+        const freshCount = queue.filter((t) => t.isNew && t.hot).length;
+        let budget = Math.max(0, this.effectiveGoal(st) - freshCount);
+        const cards = Lexicon.cards();
+        while (budget > 0) {
+          let best = null, bestScore = 0, bestCore = 0;
+          for (const b of bank) {
+            if (b.words.length < 2) continue;
+            let score = 0, core = 0;
+            for (const w of b.words) {
+              if (used.has(w) || cards[w]) continue;
+              const ent = Lexicon.get(w);
+              if (!ent) continue;
+              score++;
+              if (ent.p === 0) core++;
+            }
+            if (score > bestScore || (score === bestScore && core > bestCore)) {
+              best = b; bestScore = score; bestCore = core;
+            }
+          }
+          if (!best || bestScore < 2) break;
+          const pick = [];
+          for (const w of best.words) {
+            if (used.has(w) || cards[w]) continue;
+            used.add(w);
+            const ent = Lexicon.get(w) || { w, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+            pick.push({ key: w, ent, card: null, isNew: true, hot: false });
+            // never exceed the DDL budget for today's new words
+            if (pick.length >= size || pick.length >= budget) break;
+          }
+          if (!pick.length) break;
+          groups.push({ scene: best.s, words: pick });
+          budget -= pick.length;
+        }
+        // 3) leftover budget: core-first top-up (words without scenes)
+        if (budget > 0) {
+          const extras = Lexicon.newCandidates(budget, 0, 0);
+          for (const n of extras) {
+            if (used.has(n.key)) continue;
+            used.add(n.key);
+            groups.push({ scene: null, words: [{ key: n.key, ent: n.ent, card: null, isNew: true, hot: false }] });
+          }
+        }
       }
       return groups;
     },
 
     curWord() {
       const s = this.session;
-      return s.groups[s.gi][s.wi];
+      return s.groups[s.gi].words[s.wi];
     },
 
     renderCard() {
@@ -387,57 +486,75 @@
     renderPhase() {
       const s = this.session;
       const item = this.curWord();
-      const totalWords = s.groups.reduce((n, g) => n + g.length, 0);
-      const pos = s.groups.slice(0, s.gi).reduce((n, g) => n + g.length, 0) + s.wi + 1;
+      const totalWords = s.groups.reduce((n, g) => n + g.words.length, 0);
+      const pos = s.groups.slice(0, s.gi).reduce((n, g) => n + g.words.length, 0) + s.wi + 1;
       $("mcMode").textContent = (item.hot ? "HOT ZONE: " : "") + (item.isNew ? "NEW WORD" : "REVIEW");
-      $("mcMeta").textContent = "GROUP " + (s.gi + 1) + "/" + s.groups.length +
+      $("mcMeta").textContent = "SCENE " + (s.gi + 1) + "/" + s.groups.length +
         " · WORD " + pos + "/" + totalWords + (item.hot ? " · 🔥 FLAGGED" : "");
       $("mcProgress").style.width = ((pos - 1) / totalWords) * 100 + "%";
-      if (s.phase === "meaning") this.renderMeaning(item);
+      if (s.phase === "meaning") this.renderMeaning();
       else if (s.phase === "spell") this.renderSpell(item);
       else if (s.phase === "gap") this.renderGap(item);
       else if (s.phase === "result") this.renderGroupResult();
     },
 
-    /* ---- phase 1: listen + meaning (word hidden) ---- */
-    renderMeaning(item) {
+    senseListHtml(senses, showTrans) {
+      return senses.slice(0, 4).map((s2) =>
+        '<div class="sense-item">' +
+        (s2.pos ? '<span class="sense-pos">' + s2.pos + "</span>" : "") +
+        (s2.en ? '<span class="sense-en">' + this.esc(s2.en) + "</span>" : "") +
+        (showTrans && s2.zh ? '<span class="sense-zh">' + this.esc(s2.zh) + "</span>" : "") +
+        "</div>"
+      ).join("");
+    },
+
+    /* ---- phase 1 (group level): one shared scene carries all words ---- */
+    renderMeaning() {
       const s = this.session;
-      const ent = item.ent;
-      const senses = Lexicon.senses(item.key);
+      const group = s.groups[s.gi];
+      const item = this.curWord();
       const st = Lexicon.state().settings;
-      // sense = a concrete scene: real sentences from the practice
-      // corpus bring the word in context (target word highlighted),
-      // plus a one-line definition. The word leaves the screen for
-      // the spelling phase, so recall is from audio + meaning.
-      const sceneSents = Lexicon.exampleSentences(item.key, 2);
-      if (!sceneSents.length && ent.e) sceneSents.push(ent.e);
+      const showTrans = st.showTrans;
+      let sceneSents;
+      if (group.scene) {
+        sceneSents = [group.scene];
+        const extra = Lexicon.exampleSentences(item.key, 1);
+        if (extra.length && extra[0] !== group.scene) sceneSents.push(extra[0]);
+      } else {
+        sceneSents = Lexicon.exampleSentences(item.key, 2);
+      }
       const sceneHtml = sceneSents.map((s2, i) =>
         '<div class="scene-sentence">' + (sceneSents.length > 1 ? "<span class='scene-no'>" + (i + 1) + "</span>" : "") +
-        '<span class="scene-text">“' + this.highlightWord(s2, ent.w) + '”</span></div>'
+        '<span class="scene-text">“' + this.highlightWords(s2, group.words.map((w) => w.ent.w)) + '”</span></div>'
       ).join("");
-      const mainDef = (senses[0] && senses[0].text) || ent.d || ent.t || "";
-      const zhDef = st.showTrans && ent.t ? ent.t : "";
-      const groupLen = s.groups[s.gi].length;
+      // senses of every word in the scene — the sentence brings them in together
+      const wordBlocks = group.words.map((it) => {
+        const senses = Lexicon.senses(it.key);
+        const inner = this.senseListHtml(senses, showTrans) ||
+          '<div class="sense-text">' + this.esc(it.ent.t || "") + "</div>";
+        return '<div class="sense-word-block">' +
+          '<span class="sense-word">' + this.esc(it.ent.w) + "</span>" + inner + "</div>";
+      }).join("");
 
       $("cardStage").innerHTML =
         '<div class="card sense-card">' +
-        '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
-        " · WORD " + (s.wi + 1) + "/" + groupLen + (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
+        '<span class="card-wp">SCENE ' + (s.gi + 1) + "/" + s.groups.length +
+        " · " + group.words.length + " WORDS · VALUE " + this.sceneScore(group.scene || "", group.words) +
+        (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
         '<span class="card-status learn">SCENE LISTENING</span>' +
-        '<div class="sense-label">STAGE 1 · LISTEN TO THE SCENE — SEE THE WORD IN ACTION</div>' +
-        (sceneHtml || '<div class="card-def big">' + this.esc(mainDef) + "</div>") +
-        '<div class="card-def" style="margin-top:10px">' + this.esc(mainDef) + "</div>" +
-        (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
+        '<div class="sense-label">STAGE 1 · LISTEN TO THE SCENE — ' +
+        group.words.map((w) => this.esc(w.ent.w)).join(" · ") + "</div>" +
+        (sceneHtml || '<div class="card-def big">' + this.esc(group.words[0].ent.t || "") + "</div>") +
+        '<div class="sense-list">' + wordBlocks + "</div>" +
         '<div class="card-tts">' +
         '<button class="tts-btn" id="btnScene">◉ PLAY SCENE</button> ' +
         '<button class="tts-btn" id="btnWord">◉ WORD ONLY</button></div>' +
         '<div class="step-bar"><button class="btn btn-primary" id="btnPhaseNext">CONTINUE TO SPELL ▸</button></div>' +
-        '<div class="card-index">SCENE AUDIO PLAYS AUTOMATICALLY — HEAR IT IN CONTEXT</div>' +
+        '<div class="card-index">SCENE AUDIO PLAYS AUTOMATICALLY — EVERY WORD IN CONTEXT</div>' +
         "</div>";
-      const sceneAudio = sceneSents[0] || ent.w;
-      // hover = instant audio preview
+      const sceneAudio = sceneSents[0] || item.ent.w;
       $("btnScene").addEventListener("click", () => this.speak(sceneAudio));
-      $("btnWord").addEventListener("click", () => this.speak(ent.w));
+      $("btnWord").addEventListener("click", () => this.speak(item.ent.w));
       $("btnPhaseNext").addEventListener("click", () => {
         s.phase = "spell";
         this.renderPhase();
@@ -452,21 +569,21 @@
     renderSpell(item) {
       const s = this.session;
       const ent = item.ent;
-      const groupLen = s.groups[s.gi].length;
+      const group = s.groups[s.gi];
       this._hint = 0;
       const senses = Lexicon.senses(item.key);
-      const mainDef = (senses[0] && senses[0].text) || ent.d || ent.t || "";
-      const zhDef = Lexicon.state().settings.showTrans && ent.t ? ent.t : "";
+      const showTrans = Lexicon.state().settings.showTrans;
+      const sceneTxt = group.scene || Lexicon.exampleSentences(item.key, 1)[0] || ent.w;
       const wordLen = ent.w.length;
       const blankLen = "_".repeat(wordLen);
       $("cardStage").innerHTML =
         '<div class="card sense-card typing-card">' +
-        '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
-        " · WORD " + (s.wi + 1) + "/" + groupLen + "</span>" +
+        '<span class="card-wp">SCENE ' + (s.gi + 1) + "/" + s.groups.length +
+        " · WORD " + (s.wi + 1) + "/" + group.words.length + "</span>" +
         '<span class="card-status learn">WORD SPELLING</span>' +
         '<div class="sense-label">STAGE 2 · HEAR THE WORD — SPELL WITH HINTS</div>' +
-        (mainDef ? '<div class="card-def" style="font-size:14px">' + this.esc(mainDef) + "</div>" : "") +
-        (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
+        '<div class="sense-list">' + (this.senseListHtml(senses, showTrans) ||
+          '<div class="sense-text">' + this.esc(ent.t || "") + "</div>") + "</div>" +
         '<div class="card-tts">' +
         '<button class="tts-btn" id="btnWord2">◉ PLAY WORD</button> ' +
         '<button class="tts-btn" id="btnScene2">◉ PLAY SCENE</button></div>' +
@@ -477,9 +594,8 @@
         '<div class="typing-feedback" id="typingFeedback"></div>' +
         '<div class="card-index">WORD LENGTH SHOWN · ENTER CHECK · SPACE RE-HEAR</div>' +
         "</div>";
-      const sceneSents = Lexicon.exampleSentences(item.key, 1);
       $("btnWord2").addEventListener("click", () => this.speak(ent.w));
-      $("btnScene2").addEventListener("click", () => this.speak(sceneSents[0] || ent.w));
+      $("btnScene2").addEventListener("click", () => this.speak(sceneTxt));
       const input = $("typingInput");
       input.focus();
       input.addEventListener("keydown", (e) => {
@@ -528,7 +644,14 @@
       const s = this.session;
       if (!s || s.phase !== "spell") return;
       const item = this.curWord();
-      const sents = Lexicon.exampleSentences(item.key, 2);
+      const group = s.groups[s.gi];
+      const sents = [];
+      // the shared scene sentence first, then a second one for variety
+      if (group.scene) sents.push(group.scene);
+      for (const x of Lexicon.exampleSentences(item.key, 2)) {
+        if (sents.indexOf(x) === -1) sents.push(x);
+        if (sents.length >= 2) break;
+      }
       if (!sents.length) {
         // no real sentences: skip gap-fill
         this.finishWord();
@@ -547,17 +670,20 @@
     renderGap(item) {
       const s = this.session;
       const ent = item.ent;
-      const groupLen = s.groups[s.gi].length;
+      const group = s.groups[s.gi];
       const sentence = this._gaps[this._gapIdx];
-      const blanked = this.blankWord(sentence, ent.w);
+      let blanked = this.blankWord(sentence, ent.w);
+      // the other group words stay visible in the scene
+      const others = group.words.filter((w) => w.key !== item.key).map((w) => w.ent.w);
+      if (others.length) blanked = this.highlightWords(blanked, others);
 
       $("cardStage").innerHTML =
         '<div class="card sense-card typing-card">' +
-        '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
-        " · WORD " + (s.wi + 1) + "/" + groupLen + "</span>" +
+        '<span class="card-wp">SCENE ' + (s.gi + 1) + "/" + s.groups.length +
+        " · WORD " + (s.wi + 1) + "/" + group.words.length + "</span>" +
         '<span class="card-status learn">SCENE SPELLING</span>' +
         '<div class="sense-label">STAGE 3 · LISTEN TO THE SCENE — SPELL IT IN CONTEXT (' + (this._gapIdx + 1) + "/" + this._gaps.length + ")</div>" +
-        '<div class="card-example big">“' + this.esc(blanked) + '”</div>' +
+        '<div class="card-example big">“' + blanked + '”</div>' +
         '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
         '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="FILL THE WORD...">' +
         "</div>" +
@@ -612,8 +738,10 @@
       return String(sentence).replace(re, "______");
     },
 
-    highlightWord(sentence, word) {
-      const re = new RegExp("\\b" + Lexicon.stem(word.toLowerCase()) + "[a-z]*\\b", "gi");
+    /* highlight every study word present in the sentence */
+    highlightWords(sentence, words) {
+      const stems = words.map((w) => Lexicon.escapeRegExp(Lexicon.stem(String(w).toLowerCase())));
+      const re = new RegExp("\\b(" + stems.join("|") + ")[a-z]*\\b", "gi");
       return this.esc(String(sentence)).replace(re, '<span class="scene-word">$&</span>');
     },
 
@@ -627,11 +755,12 @@
       const q = rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : rate >= 0.5 ? 1 : 0;
       this.applyGrade(item, q);
       s.wi++;
-      if (s.wi >= s.groups[s.gi].length) {
+      if (s.wi >= s.groups[s.gi].words.length) {
         s.phase = "result";
         this.renderPhase();
       } else {
-        s.phase = "meaning";
+        // the scene was already heard — the next word starts at spelling
+        s.phase = "spell";
         this.renderPhase();
       }
     },
@@ -641,7 +770,7 @@
       const group = s.groups[s.gi];
       let rows = "";
       let sum = 0;
-      for (const item of group) {
+      for (const item of group.words) {
         const sc = s.scores[item.key] || { spell: 0, gapOk: 0, gapTotal: 0 };
         const total = 1 + (sc.gapTotal || 0);
         const rate = (sc.spell || 0) + (sc.gapOk || 0);
@@ -653,16 +782,18 @@
           '<div class="statbar"><div class="statbar-fill" style="width:' + pct + '%"></div></div>' +
           '<span class="gr-rate ' + cls + '">' + pct + "% · " + label + "</span></div>";
       }
-      const groupPct = Math.round(sum / group.length);
+      const groupPct = Math.round(sum / group.words.length);
       $("mcMode").textContent = "GROUP COMPLETE";
-      $("mcMeta").textContent = "GROUP " + (s.gi + 1) + "/" + s.groups.length +
+      $("mcMeta").textContent = "SCENE " + (s.gi + 1) + "/" + s.groups.length +
         " · SUCCESS " + groupPct + "%";
       $("cardStage").innerHTML =
         '<div class="card sense-card">' +
-        '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length + "</span>" +
+        '<span class="card-wp">SCENE ' + (s.gi + 1) + "/" + s.groups.length + "</span>" +
         '<span class="card-status ' + (groupPct >= 70 ? "mature" : groupPct >= 50 ? "learn" : "new") + '">' +
         (groupPct >= 90 ? "EXCELLENT" : groupPct >= 70 ? "GOOD" : groupPct >= 50 ? "REVIEW NEEDED" : "WEAK") + "</span>" +
         '<div class="sense-label">GROUP SUCCESS RATE — WORDS PLACED ON THE MEMORY CURVE</div>' +
+        (group.scene ? '<div class="scene-sentence" style="font-size:13px">“' +
+          this.highlightWords(group.scene, group.words.map((w) => w.ent.w)) + '”</div>' : "") +
         '<div class="gr-list">' + rows + "</div>" +
         '<div class="step-bar"><button class="btn btn-primary" id="btnNextGroup">' +
         (s.gi + 1 < s.groups.length ? "NEXT GROUP ▸" : "FINISH SESSION ▸") + "</button></div>" +
@@ -871,7 +1002,7 @@
       const due = Lexicon.dueCards().filter((d) => d.key !== key);
       const queue = due.map((d) => ({ key: d.key, ent: Lexicon.get(d.key), card: d.card, isNew: false, hot: Lexicon.isUnfamiliar(d.key) }));
       queue.unshift({ key, ent, card, isNew: false, hot: Lexicon.isUnfamiliar(key) });
-      const groups = this.groupQueue(queue);
+      const groups = this.buildGroups(queue);
       this.session = {
         queue, groups, gi: 0, wi: 0, phase: "meaning",
         scores: {}, newDone: 0, revDone: 0, failed: 0
