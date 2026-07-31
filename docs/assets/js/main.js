@@ -325,7 +325,14 @@
       const ent = item.ent;
       const senses = Lexicon.senses(item.key);
       const st = Lexicon.state().settings;
-      const mainDef = (senses[0] && senses[0].text) || ent.d || ent.t || "";
+      // full sense list: every sense (pos + meaning + example) so the
+      // learner understands the word in context before spelling it
+      const senseList = senses.map((sn) =>
+        '<div class="sense-item">' +
+        (sn.pos ? '<span class="sense-pos">' + this.esc(sn.pos) + "</span>" : "") +
+        '<span class="sense-text">' + this.esc(sn.text) + "</span>" +
+        (sn.ex ? '<div class="sense-ex">“' + this.esc(sn.ex) + '”</div>' : "") +
+        "</div>").join("");
       const zhDef = st.showTrans && ent.t ? ent.t : "";
       const sents = Lexicon.exampleSentences(item.key, 2);
       const groupLen = s.groups[s.gi].length;
@@ -334,9 +341,9 @@
         '<div class="card sense-card">' +
         '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
         " · WORD " + (s.wi + 1) + "/" + groupLen + (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
-        '<span class="card-status learn">LISTEN & MEANING</span>' +
-        '<div class="sense-label">HEAR THE WORD — MEANING BELOW (WORD HIDDEN)</div>' +
-        '<div class="card-def big">' + this.esc(mainDef) + "</div>" +
+        '<span class="card-status learn">SENSE · LISTEN & MEANING</span>' +
+        '<div class="sense-label">HEAR THE WORD — STUDY ITS SENSES (WORD HIDDEN)</div>' +
+        '<div class="sense-list">' + senseList + "</div>" +
         (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
         (sents.length ? '<div class="card-example">“' + this.esc(this.blankWord(sents[0], ent.w)) + '”</div>' : "") +
         '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ PLAY WORD AUDIO</button></div>' +
