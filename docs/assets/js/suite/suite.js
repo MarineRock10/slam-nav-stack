@@ -46,9 +46,9 @@
       if (!map) return;
       map[id] = pct;
       this.save();
-      // count as daily activity (review slot) for the streak
+      // count as daily activity (practice slot) for the streak
       if (global.Lexicon) {
-        Lexicon.logStudy(0, 1);
+        Lexicon.logStudy(0, 0, 1);
         if (global.App && App.renderStats) App.renderStats();
       }
     },

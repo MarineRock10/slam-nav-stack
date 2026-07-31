@@ -131,25 +131,30 @@
       }
       const goal = st.settings.goal;
       const todayKey = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, "0") + "-" + String(new Date().getDate()).padStart(2, "0");
-      const hist = (st.stats.history || {})[todayKey] || { n: 0, r: 0 };
-      const todayTotal = (hist.n || 0) + (hist.r || 0);
+      const hist = (st.stats.history || {})[todayKey] || { n: 0, r: 0, p: 0 };
+      const todayTotal = (hist.n || 0) + (hist.r || 0) + (hist.p || 0);
 
       if (this.stView === "today") {
-        // ---- TODAY view: focus on the daily mission ----
+        // ---- TODAY view: composite progress across all factors ----
+        // new words 60% · reviews 25% · practice 15%
+        const newScore = Math.min(newToday / goal, 1) * 60;
+        const revScore = Math.min((hist.r || 0) / Math.max(1, Math.round(goal * 0.5)), 1) * 25;
+        const pracScore = Math.min((hist.p || 0) / 2, 1) * 15;
+        const totalPct = Math.round(newScore + revScore + pracScore);
         $("stLblExam").textContent = "MISSION ETA";
-        $("stLblToday").textContent = "NEW WORDS TODAY";
+        $("stLblToday").textContent = "TODAY PROGRESS";
         $("stLblDue").textContent = "REVIEWS TODAY";
         $("stLblStreak").textContent = "TOTAL ACTIVITY";
-        $("stLblCover").textContent = "DAILY GOAL";
-        $("stToday").textContent = newToday + "/" + goal;
-        $("stTodayPct").textContent = Math.min(100, Math.round((newToday / goal) * 100)) + "%";
+        $("stLblCover").textContent = "DAILY GOAL (NEW WORDS)";
+        $("stToday").textContent = totalPct + "%";
+        $("stTodayPct").textContent = "NEW " + newToday + "/" + goal + " · REV " + (hist.r || 0) + " · PRAC " + (hist.p || 0);
         $("stDue").textContent = hist.r || 0;
         $("stDueSub").textContent = "REVIEWS DONE";
         $("stStreak").textContent = todayTotal;
-        $("stStreakSub").textContent = "CARDS TODAY";
+        $("stStreakSub").textContent = "TOTAL ACTIVITIES";
         const goalPct = Math.min(100, Math.round((newToday / goal) * 100));
         $("stCoverage").textContent = newToday >= goal ? "GOAL MET ✓" : goalPct + "%";
-        $("stCoverageFill").style.width = goalPct + "%";
+        $("stCoverageFill").style.width = totalPct + "%";
       } else {
         // ---- ALL TIME view ----
         $("stLblExam").textContent = "MISSION ETA";

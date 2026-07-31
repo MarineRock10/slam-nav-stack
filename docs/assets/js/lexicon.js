@@ -291,12 +291,13 @@
     },
 
     /* ---- study history / streak ---- */
-    logStudy(newCount, reviewCount) {
+    logStudy(newCount, reviewCount, practiceCount) {
       const st = this.state().stats;
       const today = dayKey();
-      if (!st.history[today]) st.history[today] = { n: 0, r: 0 };
+      if (!st.history[today]) st.history[today] = { n: 0, r: 0, p: 0 };
       st.history[today].n += newCount;
       st.history[today].r += reviewCount;
+      st.history[today].p += practiceCount || 0;
       st.totalSeen = Object.keys(this.cards()).length;
       if (st.lastDay !== today) {
         const y = new Date(Date.now() - 86400000);
