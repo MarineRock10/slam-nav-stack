@@ -224,8 +224,15 @@
       // 2) flagged words never studied yet — priority new items
       const fresh = Lexicon.unfamiliarFresh();
       fresh.forEach((n) => queue.push({ key: n.key, ent: n.ent, card: null, isNew: true, hot: true }));
-      // 3) regular new words up to the daily target (minus reserved slots)
+      // 3) regular new words up to the daily target (minus reserved slots),
+      //    shuffled so the study order is not alphabetical
       const newWords = Lexicon.newCandidates(st.settings.goal, 0, fresh.length);
+      for (let i = newWords.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = newWords[i];
+        newWords[i] = newWords[j];
+        newWords[j] = tmp;
+      }
       newWords.forEach((n) => queue.push({ key: n.key, ent: n.ent, card: Lexicon.getCard(n.key), isNew: true, hot: false }));
       return queue;
     },
@@ -421,8 +428,11 @@
         if (ans === target) {
           t.listenOk = true;
           fb.className = "typing-feedback ok";
-          fb.textContent = "✓ AUDIO RECALL CORRECT";
+          fb.textContent = "✓ AUDIO RECALL CORRECT — SELF-GRADE BELOW";
           input.readOnly = true;
+          // immediately show the self-grade buttons (no extra Enter needed)
+          $("senseGrade").hidden = false;
+          $("senseGrade").scrollIntoView({ block: "nearest" });
         } else {
           t.listenOk = false;
           fb.className = "typing-feedback err";
