@@ -152,10 +152,43 @@
     },
 
     speak(text) {
+      const t = String(text || "").trim();
+      if (!t) return;
+      // online neural TTS first (runtime-detected), then local
+      if (t.length <= 160 && this._tryOnline(t)) return;
+      this._speakLocal(t);
+    },
+
+    _tryOnline(text) {
+      const engines = [
+        "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text),
+        "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text)
+      ];
+      let i = 0;
+      const tryNext = () => {
+        if (i >= engines.length) { this._speakLocal(text); return false; }
+        const url = engines[i++];
+        try {
+          if (this._audio) { this._audio.pause(); this._audio = null; }
+          const a = new Audio(url);
+          let done = false;
+          const fail = () => { if (!done) { done = true; if (this._audio === a) this._audio = null; tryNext(); } };
+          const p = a.play();
+          if (p && p.catch) p.catch(fail);
+          a.addEventListener("error", fail);
+          setTimeout(() => { if (this._audio === a && a.paused) fail(); }, 4000);
+          this._audio = a;
+          return true;
+        } catch (e) { return tryNext(); }
+      };
+      return tryNext();
+    },
+
+    _speakLocal(text) {
       try {
         global.speechSynthesis.cancel();
         const st = global.Lexicon ? Lexicon.state().settings : {};
-        const parts = String(text || "").length > 140 ? String(text).split(/(?<=[.!?;,])\s+/) : [text];
+        const parts = String(text).length > 140 ? String(text).split(/(?<=[.!?;,])\s+/) : [text];
         let voice = null;
         const voices = global.speechSynthesis.getVoices();
         if (st.voiceName) voice = voices.find((x) => x.name === st.voiceName) || null;

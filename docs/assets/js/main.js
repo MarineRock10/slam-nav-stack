@@ -647,13 +647,53 @@
       if (!st.voice) return;
       const t = String(text || "").trim();
       if (!t) return;
+      // online neural TTS first — runtime-detected, falls back to local
+      if (t.length <= 160 && this.tryOnlineTTS(t)) return;
+      this.speakLocal(t);
+    },
+
+    /* try free high-quality online engines in order; each failure
+     * falls through to the next, finally to the local synthesizer.
+     * Works wherever the learner's browser can reach them. */
+    tryOnlineTTS(text) {
+      const engines = [
+        "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text),
+        "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text)
+      ];
+      let i = 0;
+      const tryNext = () => {
+        if (i >= engines.length) {
+          this.speakLocal(text);
+          return false;
+        }
+        const url = engines[i++];
+        try {
+          if (this._audio) { this._audio.pause(); this._audio = null; }
+          const a = new Audio(url);
+          let done = false;
+          const fail = () => { if (!done) { done = true; if (this._audio === a) this._audio = null; tryNext(); } };
+          const p = a.play();
+          if (p && p.catch) p.catch(fail);
+          a.addEventListener("error", fail);
+          setTimeout(() => { if (this._audio === a && a.paused) fail(); }, 4000);
+          this._audio = a;
+          return true;
+        } catch (e) {
+          return tryNext();
+        }
+      };
+      return tryNext();
+    },
+
+    speakLocal(text) {
+      const st = Lexicon.state().settings;
       try {
         global.speechSynthesis.cancel();
         // split long utterances at sentence/clause boundaries to avoid stutter
-        const parts = t.length > 140 ? t.split(/(?<=[.!?;,])\s+/) : [t];
+        const parts = String(text).length > 140 ? String(text).split(/(?<=[.!?;,])\s+/) : [text];
         const voice = this.pickVoice(st);
         for (const part of parts) {
-          if (!part.trim()) continue;
+          if (!String(part).trim()) continue;
           const u = new SpeechSynthesisUtterance(part.trim());
           u.lang = "en-US";
           u.rate = st.rate || 0.9;
