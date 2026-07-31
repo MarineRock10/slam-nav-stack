@@ -54,31 +54,36 @@
 
         <div class="col-stack">
           <div class="panel">
-            <div class="panel-title"><span class="pt-dot"></span>MISSION STATUS</div>
+            <div class="panel-title"><span class="pt-dot"></span>MISSION STATUS
+              <span class="view-toggle" id="stToggle">
+                <button class="btn view-t active" data-v="all">ALL TIME</button>
+                <button class="btn view-t" data-v="today">TODAY</button>
+              </span>
+            </div>
             <div class="stat-grid">
               <div class="stat">
-                <div class="stat-label">MISSION ETA</div>
+                <div class="stat-label" id="stLblExam">MISSION ETA</div>
                 <div class="stat-value big" id="stExam">--d</div>
                 <div class="stat-sub" id="stExamDate">TARGET --</div>
               </div>
               <div class="stat">
-                <div class="stat-label">TODAY PROGRESS</div>
+                <div class="stat-label" id="stLblToday">TODAY PROGRESS</div>
                 <div class="stat-value" id="stToday">0/25</div>
                 <div class="stat-sub" id="stTodayPct">0%</div>
               </div>
               <div class="stat">
-                <div class="stat-label">REVIEWS DUE</div>
+                <div class="stat-label" id="stLblDue">REVIEWS DUE</div>
                 <div class="stat-value" id="stDue">0</div>
                 <div class="stat-sub" id="stDueSub">QUEUED</div>
               </div>
               <div class="stat">
-                <div class="stat-label">STREAK</div>
+                <div class="stat-label" id="stLblStreak">STREAK</div>
                 <div class="stat-value" id="stStreak">0</div>
-                <div class="stat-sub">CONSECUTIVE DAYS</div>
+                <div class="stat-sub" id="stStreakSub">CONSECUTIVE DAYS</div>
               </div>
             </div>
             <div class="statbar-wrap">
-              <div class="statbar-label"><span>VOCAB COVERAGE</span><span id="stCoverage">0%</span></div>
+              <div class="statbar-label"><span id="stLblCover">VOCAB COVERAGE</span><span id="stCoverage">0%</span></div>
               <div class="statbar"><div class="statbar-fill" id="stCoverageFill"></div></div>
             </div>
           </div>
@@ -116,12 +121,6 @@
           <div class="statbar"><div class="statbar-fill" id="mcProgress"></div></div>
         </div>
         <div class="card-stage" id="cardStage"></div>
-        <div class="grade-bar" id="gradeBar" hidden>
-          <button class="btn grade grade-again" data-q="0">AGAIN</button>
-          <button class="btn grade grade-hard" data-q="1">HARD</button>
-          <button class="btn grade grade-good" data-q="2">GOOD</button>
-          <button class="btn grade grade-easy" data-q="3">EASY</button>
-        </div>
         <div class="sense-grade" id="senseGrade" hidden>
           <button class="btn grade grade-again" data-q="0">UNSURE</button>
           <button class="btn grade grade-hard" data-q="1">PARTIAL</button>
@@ -210,14 +209,6 @@
       <div class="form-row">
         <label for="cfgExam">MISSION DEADLINE (YYYY-MM-DD)</label>
         <input type="date" id="cfgExam" class="input">
-      </div>
-      <div class="form-row">
-        <label for="cfgMode">LEARNING MODE</label>
-        <select id="cfgMode" class="input">
-          <option value="sense">SENSE — UNDERSTAND / RECALL / SPELL</option>
-          <option value="card">FLASHCARD — SELF-GRADED</option>
-          <option value="typing">TYPING — SPELLING DRILL</option>
-        </select>
       </div>
       <div class="form-row">
         <label class="chk"><input type="checkbox" id="cfgTrans" checked> SHOW TRANSLATIONS ON CARDS</label>

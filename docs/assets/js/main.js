@@ -100,6 +100,8 @@
     },
 
     /* ================= statistics ================= */
+    stView: "all",   // "all" | "today"
+
     renderAll() {
       this.renderStats();
       this.renderStages();
@@ -128,21 +130,47 @@
         if (c.added && now - c.added < DAY) newToday++;
       }
       const goal = st.settings.goal;
-      $("stToday").textContent = newToday + "/" + goal;
-      $("stTodayPct").textContent = Math.min(100, Math.round((newToday / goal) * 100)) + "%";
+      const todayKey = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, "0") + "-" + String(new Date().getDate()).padStart(2, "0");
+      const hist = (st.stats.history || {})[todayKey] || { n: 0, r: 0 };
+      const todayTotal = (hist.n || 0) + (hist.r || 0);
 
-      $("stDue").textContent = counts.due;
-      $("stDueSub").textContent = counts.due ? "QUEUED FOR REVIEW" : "ALL CLEAR";
-      $("stStreak").textContent = st.stats.streak;
-
-      const pct = total ? Math.round((learned / total) * 1000) / 10 : 0;
-      $("stCoverage").textContent = pct + "%";
-      $("stCoverageFill").style.width = Math.min(100, pct) + "%";
+      if (this.stView === "today") {
+        // ---- TODAY view: focus on the daily mission ----
+        $("stLblExam").textContent = "MISSION ETA";
+        $("stLblToday").textContent = "NEW WORDS TODAY";
+        $("stLblDue").textContent = "REVIEWS TODAY";
+        $("stLblStreak").textContent = "TOTAL ACTIVITY";
+        $("stLblCover").textContent = "DAILY GOAL";
+        $("stToday").textContent = newToday + "/" + goal;
+        $("stTodayPct").textContent = Math.min(100, Math.round((newToday / goal) * 100)) + "%";
+        $("stDue").textContent = hist.r || 0;
+        $("stDueSub").textContent = "REVIEWS DONE";
+        $("stStreak").textContent = todayTotal;
+        $("stStreakSub").textContent = "CARDS TODAY";
+        const goalPct = Math.min(100, Math.round((newToday / goal) * 100));
+        $("stCoverage").textContent = newToday >= goal ? "GOAL MET ✓" : goalPct + "%";
+        $("stCoverageFill").style.width = goalPct + "%";
+      } else {
+        // ---- ALL TIME view ----
+        $("stLblExam").textContent = "MISSION ETA";
+        $("stLblToday").textContent = "TODAY PROGRESS";
+        $("stLblDue").textContent = "REVIEWS DUE";
+        $("stLblStreak").textContent = "STREAK";
+        $("stLblCover").textContent = "VOCAB COVERAGE";
+        $("stToday").textContent = newToday + "/" + goal;
+        $("stTodayPct").textContent = Math.min(100, Math.round((newToday / goal) * 100)) + "%";
+        $("stDue").textContent = counts.due;
+        $("stDueSub").textContent = counts.due ? "QUEUED FOR REVIEW" : "ALL CLEAR";
+        $("stStreak").textContent = st.stats.streak;
+        $("stStreakSub").textContent = "CONSECUTIVE DAYS";
+        const pct = total ? Math.round((learned / total) * 1000) / 10 : 0;
+        $("stCoverage").textContent = pct + "%";
+        $("stCoverageFill").style.width = Math.min(100, pct) + "%";
+      }
 
       // vocab tab badge
       const tab = document.querySelector('.tab[data-view="vocab"]');
-      const deck = Lexicon.unfamiliarList();
-      const hot = Object.keys(deck).length;
+      const hot = Object.keys(Lexicon.unfamiliarList()).length;
       tab.textContent = hot > 0 ? "VOCABULARY (" + hot + ")" : "VOCABULARY";
     },
 
@@ -219,7 +247,7 @@
       $("mcMode").textContent = "STANDBY";
       $("mcMeta").textContent = "WAYPOINTS: 0 / 0";
       $("mcProgress").style.width = "0%";
-      $("gradeBar").hidden = true;
+      $("senseGrade").hidden = true;
       $("senseGrade").hidden = true;
       $("cardStage").innerHTML =
         '<div class="card"><div class="card-word" style="font-size:20px">' +
@@ -230,16 +258,18 @@
       $("trainActions").style.display = "";
     },
 
-    /* ---- card rendering by mode ---- */
+    /* ---- card rendering: automatic flow ----
+     * Every card runs the full pipeline automatically:
+     *   1) SENSE UNDERSTAND — word + all senses
+     *   2) CONTEXT RECALL   — blanked example, reveal meaning
+     *   3) LISTEN & TYPE    — hear the word, type it from audio
+     * then self-grade UNSURE / PARTIAL / UNDERSTOOD. */
     renderCard() {
       const s = this.session;
       if (!s) return;
       const item = s.queue[s.idx];
-      const mode = Lexicon.state().settings.mode || "sense";
       $("trainActions").style.display = "none";
       $("sessionDone").hidden = true;
-      if (mode === "typing") { this.renderTypingCard(item); return; }
-      if (mode === "card") { this.renderClassicCard(item); return; }
       this.renderSenseCard(item);
     },
 
@@ -263,7 +293,7 @@
       const statusTxt = card.lvl === 2 ? "MASTERED" : card.lvl === 1 ? "LEARNING" : "NEW";
       this._sense = { item, step: 0, revealed: false };
       this._meta(item, s);
-      $("gradeBar").hidden = true;
+      $("senseGrade").hidden = true;
       $("senseGrade").hidden = true;
 
       const phonetic = ent.uk ? ("UK " + ent.uk + "  US " + (ent.us || "—")) : (ent.us ? "US " + ent.us : "");
@@ -329,7 +359,7 @@
         return;
       }
       if (t.step === 1) {
-        // reveal the meaning, then move to spelling
+        // reveal the meaning, then move to audio typing
         t.step = 2;
         const senseList = senses.map((sn) =>
           '<div class="sense-item">' +
@@ -346,74 +376,75 @@
           (st.showTrans && ent.t && !ent.d ? '<div class="card-def zh">' + this.esc(ent.t) + "</div>" : "") +
           '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ SPEAK</button></div>' +
           '<div class="card-index">STEP 2/3 · RECALL · ' + pos + " / " + total + "</div>" +
-          '<div class="step-bar"><button class="btn btn-primary" id="btnSenseNext">CONTINUE TO SPELLING ▸</button></div>' +
+          '<div class="step-bar"><button class="btn btn-primary" id="btnSenseNext">CONTINUE TO AUDIO TYPE ▸</button></div>' +
           "</div>";
         $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
         $("btnSenseNext").addEventListener("click", () => this.senseNext());
         return;
       }
-      // step 3: spelling lock — type the word
+      // step 3: LISTEN & TYPE — hear the word, type it from audio
       t.step = 3;
-      const ex2 = ent.e || "";
-      let blanked2 = ex2;
-      if (ex2) blanked2 = ex2.replace(new RegExp("\\b" + this.escapeRegExp(ent.w) + "\\b", "gi"), "______");
+      const senseText = senses.map((sn) => sn.text).join(" · ");
       $("cardStage").innerHTML =
         '<div class="card sense-card typing-card">' +
         '<span class="card-wp">WP-' + String(pos).padStart(4, "0") + "</span>" +
         '<span class="card-status ' + statusCls + '">' + statusTxt + "</span>" +
-        '<div class="sense-label">SPELL THE WORD</div>' +
-        (ex2 ? '<div class="card-example">“' + this.esc(blanked2) + '”</div>' : "") +
+        '<div class="sense-label">HEAR THE WORD — TYPE WHAT YOU HEAR</div>' +
+        (senseText ? '<div class="card-def zh" style="font-size:12px">' + this.esc(senseText) + "</div>" : "") +
+        '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ PLAY WORD AUDIO</button></div>' +
         '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
-        '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD...">' +
+        '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD YOU HEARD...">' +
         "</div>" +
         '<div class="typing-feedback" id="typingFeedback"></div>' +
-        '<div class="card-index">STEP 3/3 · SPELL · ' + pos + " / " + total + " · ENTER CONFIRM</div>" +
+        '<div class="card-index">STEP 3/3 · AUDIO TYPE · ' + pos + " / " + total + " · ENTER CONFIRM</div>" +
         "</div>";
-      $("senseGrade").hidden = false;
+      $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
       const input = $("typingInput");
       input.focus();
       input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") this.senseSpellCheck();
-        else if (e.key === "Escape") this.senseSkipSpell();
+        if (e.key === "Enter") this.senseListenCheck();
+        else if (e.key === "Escape") this.senseSkipListen();
       });
+      // auto-play the word once so the learner listens first
+      setTimeout(() => this.speak(ent.w), 350);
     },
 
-    senseSpellCheck() {
+    senseListenCheck() {
       const t = this._sense;
       if (!t || t.graded) return;
       const input = $("typingInput");
       const fb = $("typingFeedback");
       const target = t.item.ent.w.toLowerCase();
-      if (!t.spellDone) {
-        t.spellDone = true;
+      if (!t.listenDone) {
+        t.listenDone = true;
         const ans = (input.value || "").trim().toLowerCase();
         if (ans === target) {
-          t.spellOk = true;
+          t.listenOk = true;
           fb.className = "typing-feedback ok";
-          fb.textContent = "✓ SPELLING CORRECT";
+          fb.textContent = "✓ AUDIO RECALL CORRECT";
           input.readOnly = true;
         } else {
-          t.spellOk = false;
+          t.listenOk = false;
           fb.className = "typing-feedback err";
           fb.textContent = "✗ " + t.item.ent.w + " — PRESS ENTER TO CONTINUE";
           input.readOnly = true;
         }
         return;
       }
-      // done with spelling — now self-grade
+      // done with audio typing — now self-grade
       $("senseGrade").hidden = false;
       $("senseGrade").scrollIntoView({ block: "nearest" });
       fb.textContent = "SELF-GRADE: UNSURE / PARTIAL / UNDERSTOOD";
       fb.className = "typing-feedback";
     },
 
-    senseSkipSpell() {
+    senseSkipListen() {
       const t = this._sense;
       if (!t || t.graded) return;
       const fb = $("typingFeedback");
-      if (!t.spellDone) {
-        t.spellDone = true;
-        t.spellOk = false;
+      if (!t.listenDone) {
+        t.listenDone = true;
+        t.listenOk = false;
         fb.className = "typing-feedback err";
         fb.textContent = "✗ " + t.item.ent.w + " — PRESS ENTER TO CONTINUE";
         $("typingInput").readOnly = true;
@@ -426,140 +457,9 @@
       const t = this._sense;
       if (!t || t.graded) return;
       t.graded = true;
-      // spelling success boosts the grade one notch (UNSURE -> PARTIAL floor)
-      if (t.spellOk && q === 0) q = 1;
+      // audio recall success boosts the grade one notch (UNSURE -> PARTIAL floor)
+      if (t.listenOk && q === 0) q = 1;
       this.grade(q);
-    },
-
-    /* ---- CLASSIC flashcard mode ---- */
-    renderClassicCard(item) {
-      const s = this.session;
-      const ent = item.ent;
-      const card = Lexicon.getCard(item.key) || SRS.fresh();
-      const st = Lexicon.state().settings;
-      const phonetic = ent.uk ? ("UK " + ent.uk + "  US " + (ent.us || "—")) : (ent.us ? "US " + ent.us : "");
-      const defHtml = [];
-      if (ent.d) defHtml.push('<div class="card-def">' + this.esc(ent.d) + "</div>");
-      if (st.showTrans && ent.t) defHtml.push('<div class="card-def zh">' + this.esc(ent.t) + "</div>");
-      if (!ent.d && !ent.t) defHtml.push('<div class="card-def zh">(no definition loaded)</div>');
-      if (ent.e) defHtml.push('<div class="card-example">“' + this.esc(ent.e) + '”</div>');
-      const statusCls = card.lvl === 2 ? "mature" : card.lvl === 1 ? "learn" : "new";
-      const statusTxt = card.lvl === 2 ? "MATURE" : card.lvl === 1 ? "LEARNING" : "NEW";
-      const total = s.queue.length;
-      const pos = s.idx + 1;
-
-      this._meta(item, s);
-      $("gradeBar").hidden = false;
-      $("senseGrade").hidden = true;
-      $("cardStage").innerHTML =
-        '<div class="card">' +
-        '<span class="card-wp">WP-' + String(pos).padStart(4, "0") + (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
-        '<span class="card-status ' + statusCls + '">' + statusTxt + "</span>" +
-        '<div class="card-word">' + this.esc(ent.w) + "</div>" +
-        (phonetic ? '<div class="card-phonetic">' + this.esc(phonetic) + "</div>" : "") +
-        defHtml.join("") +
-        '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ SPEAK</button></div>' +
-        '<div class="card-index">' + pos + " / " + total + "</div>" +
-        "</div>";
-      $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
-    },
-
-    /* ---- TYPING drill mode ---- */
-    renderTypingCard(item) {
-      const s = this.session;
-      const ent = item.ent;
-      const card = Lexicon.getCard(item.key) || SRS.fresh();
-      const st = Lexicon.state().settings;
-      this._typing = { item, submitted: false, correct: false, graded: false };
-      const total = s.queue.length;
-      const pos = s.idx + 1;
-
-      this._meta(item, s);
-      $("gradeBar").hidden = true;
-      $("senseGrade").hidden = true;
-
-      let example = ent.e || "";
-      if (example) {
-        example = example.replace(new RegExp("\\b" + this.escapeRegExp(ent.w) + "\\b", "gi"), "______");
-      }
-      const defHtml = [];
-      if (ent.d) defHtml.push('<div class="card-def">' + this.esc(ent.d) + "</div>");
-      if (st.showTrans && ent.t) defHtml.push('<div class="card-def zh">' + this.esc(ent.t) + "</div>");
-      if (example) defHtml.push('<div class="card-example">“' + this.esc(example) + '”</div>');
-
-      const statusCls = card.lvl === 2 ? "mature" : card.lvl === 1 ? "learn" : "new";
-      const statusTxt = card.lvl === 2 ? "MATURE" : card.lvl === 1 ? "LEARNING" : "NEW";
-
-      $("cardStage").innerHTML =
-        '<div class="card typing-card">' +
-        '<span class="card-wp">WP-' + String(pos).padStart(4, "0") + (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
-        '<span class="card-status ' + statusCls + '">' + statusTxt + "</span>" +
-        defHtml.join("") +
-        '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ HEAR PRONUNCIATION</button></div>' +
-        '<div class="typing-row"><span class="typing-prompt">WAYPOINT &gt;</span>' +
-        '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD...">' +
-        "</div>" +
-        '<div class="typing-feedback" id="typingFeedback"></div>' +
-        '<div class="card-index">' + pos + " / " + total + " · ENTER CONFIRM · ESC SKIP</div>" +
-        "</div>";
-
-      $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
-      const input = $("typingInput");
-      input.focus();
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") this.submitTyping();
-        else if (e.key === "Escape") this.skipTyping();
-      });
-    },
-
-    submitTyping() {
-      const t = this._typing;
-      if (!t || t.graded) return;
-      const input = $("typingInput");
-      const fb = $("typingFeedback");
-      const target = t.item.ent.w.toLowerCase();
-
-      if (!t.submitted) {
-        t.submitted = true;
-        const ans = (input.value || "").trim().toLowerCase();
-        if (ans === target) {
-          t.correct = true;
-          fb.className = "typing-feedback ok";
-          fb.textContent = "✓ " + t.item.ent.w + " — CORRECT, ADVANCING";
-          input.readOnly = true;
-          setTimeout(() => {
-            if (this._typing === t && !t.graded) {
-              t.graded = true;
-              this.grade(2);
-            }
-          }, 1200);
-        } else {
-          t.correct = false;
-          fb.className = "typing-feedback err";
-          fb.textContent = "✗ EXPECTED: " + t.item.ent.w + " — PRESS ENTER TO CONTINUE";
-          input.readOnly = true;
-        }
-        return;
-      }
-      t.graded = true;
-      this.grade(t.correct ? 2 : 0);
-    },
-
-    skipTyping() {
-      const t = this._typing;
-      if (!t || t.graded) return;
-      const input = $("typingInput");
-      const fb = $("typingFeedback");
-      if (!t.submitted) {
-        t.submitted = true;
-        t.correct = false;
-        fb.className = "typing-feedback err";
-        fb.textContent = "✗ SKIPPED — EXPECTED: " + t.item.ent.w + " — PRESS ENTER TO CONTINUE";
-        input.readOnly = true;
-      } else {
-        t.graded = true;
-        this.grade(0);
-      }
     },
 
     /* ---- grading ---- */
@@ -601,7 +501,7 @@
       const s = this.session;
       Lexicon.logStudy(s.newDone, s.revDone);
       WordAnnotate.refresh();
-      $("gradeBar").hidden = true;
+      $("senseGrade").hidden = true;
       $("senseGrade").hidden = true;
       $("mcProgress").style.width = "100%";
       $("mcMode").textContent = "MISSION COMPLETE";
@@ -818,7 +718,6 @@
         const s = Lexicon.state().settings;
         $("cfgGoal").value = s.goal;
         $("cfgExam").value = s.examDate;
-        $("cfgMode").value = s.mode || "sense";
         $("cfgTrans").checked = s.showTrans;
         $("cfgVoice").checked = s.voice;
         $("cfgRate").value = s.rate;
@@ -828,7 +727,6 @@
         const s = Lexicon.state().settings;
         s.goal = Math.max(1, Math.min(500, parseInt($("cfgGoal").value, 10) || 25));
         s.examDate = $("cfgExam").value || "2026-11-15";
-        s.mode = ["sense", "card", "typing"].includes($("cfgMode").value) ? $("cfgMode").value : "sense";
         s.showTrans = $("cfgTrans").checked;
         s.voice = $("cfgVoice").checked;
         s.rate = parseFloat($("cfgRate").value) || 0.9;
@@ -862,8 +760,8 @@
       $("btnStart").addEventListener("click", () => this.startSession(false));
       $("btnReview").addEventListener("click", () => this.startSession(true));
       $("btnDoneReturn").addEventListener("click", () => this.switchView("stats"));
-      document.querySelectorAll(".grade[data-q]").forEach((b) =>
-        b.addEventListener("click", () => this.grade(parseInt(b.dataset.q, 10))));
+      // sense self-grade buttons (single binding — the generic .grade
+      // selector would double-bind these and grade twice per click)
       document.querySelectorAll("#senseGrade .grade").forEach((b) =>
         b.addEventListener("click", () => this.senseGrade(parseInt(b.dataset.q, 10))));
       document.querySelectorAll("#dkFilter .deck-f").forEach((b) =>
@@ -872,6 +770,12 @@
           this._deckPage = 0;
           document.querySelectorAll("#dkFilter .deck-f").forEach((x) => x.classList.toggle("active", x === b));
           this.renderDeck();
+        }));
+      document.querySelectorAll("#stToggle .view-t").forEach((b) =>
+        b.addEventListener("click", () => {
+          this.stView = b.dataset.v;
+          document.querySelectorAll("#stToggle .view-t").forEach((x) => x.classList.toggle("active", x === b));
+          this.renderAll();
         }));
 
       $("lgSearch").addEventListener("input", (e) => {
@@ -897,10 +801,9 @@
         if (e.target && /input|textarea/i.test(e.target.tagName)) return;
         if (this.session && this.view === "vocab" && this.vsub === "train") {
           const k = e.key;
-          if (k === "1") { if (this._sense) this.senseGrade(0); else this.grade(0); }
-          else if (k === "2") { if (this._sense) this.senseGrade(1); else this.grade(1); }
-          else if (k === "3") { if (this._sense) this.senseGrade(2); else this.grade(2); }
-          else if (k === "4") this.grade(3);
+          if (k === "1") this.senseGrade(0);
+          else if (k === "2") this.senseGrade(1);
+          else if (k === "3") this.senseGrade(2);
           else if (k === " ") {
             e.preventDefault();
             const item = this.session.queue[this.session.idx];

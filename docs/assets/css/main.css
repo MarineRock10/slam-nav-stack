@@ -761,6 +761,11 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 .stage-label { color: var(--fg-dim); font-size: 10px; letter-spacing: 0.1em; }
 .stage-count { color: var(--fg-bright); font-size: 11px; text-align: right; }
 
+/* all-time / today toggle */
+.view-toggle { margin-left: auto; display: flex; gap: 4px; }
+.view-t { padding: 3px 10px; font-size: 10px; letter-spacing: 0.08em; }
+.view-t.active { border-color: var(--accent); color: var(--accent); background: var(--bg-panel); }
+
 /* module stats */
 .mod-stats { display: flex; flex-direction: column; gap: 6px; }
 .mod-stat { display: grid; grid-template-columns: 180px 1fr 70px; gap: 10px; align-items: center; font-size: 11px; color: var(--fg-dim); }

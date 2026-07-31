@@ -23,7 +23,6 @@
     settings: {
       goal: 25,                       // daily new-word target
       examDate: "2026-11-15",         // target exam date (YYYY-MM-DD), user-adjustable
-      mode: "card",                   // "card" = flashcard, "typing" = spelling drill
       showTrans: true,                // show translations on cards
       voice: true,                    // TTS feedback
       rate: 0.9                       // speech rate
@@ -208,14 +207,16 @@
     unfamiliarList() {
       return this.getUnfamiliar();
     },
-    /* unfamiliar words with no card yet -> high-priority new items */
+    /* unfamiliar words with no card yet -> high-priority new items.
+     * Words outside the lexicon get a placeholder entry so they can
+     * still be studied (spelling/audio) once flagged in practice. */
     unfamiliarFresh() {
       const cards = this.cards();
       const out = [];
       for (const key in this.getUnfamiliar()) {
         if (!cards[key]) {
-          const ent = this.get(key);
-          if (ent) out.push({ key, ent });
+          const ent = this.get(key) || { w: key, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+          out.push({ key, ent });
         }
       }
       return out;
