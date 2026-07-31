@@ -325,30 +325,32 @@
       const ent = item.ent;
       const senses = Lexicon.senses(item.key);
       const st = Lexicon.state().settings;
-      // full sense list: every sense (pos + meaning + example) so the
-      // learner understands the word in context before spelling it
-      const senseList = senses.map((sn) =>
-        '<div class="sense-item">' +
-        (sn.pos ? '<span class="sense-pos">' + this.esc(sn.pos) + "</span>" : "") +
-        '<span class="sense-text">' + this.esc(sn.text) + "</span>" +
-        (sn.ex ? '<div class="sense-ex">“' + this.esc(sn.ex) + '”</div>' : "") +
-        "</div>").join("");
+      // sense = a concrete scene: real sentences from the practice
+      // corpus bring the word in context (target word highlighted),
+      // plus a one-line definition. The word leaves the screen for
+      // the spelling phase, so recall is from audio + meaning.
+      const sceneSents = Lexicon.exampleSentences(item.key, 2);
+      if (!sceneSents.length && ent.e) sceneSents.push(ent.e);
+      const sceneHtml = sceneSents.map((s2, i) =>
+        '<div class="scene-sentence">' + (sceneSents.length > 1 ? "<span class='scene-no'>" + (i + 1) + "</span>" : "") +
+        '<span class="scene-text">“' + this.esc(this.highlightWord(s2, ent.w)) + '”</span></div>'
+      ).join("");
+      const mainDef = (senses[0] && senses[0].text) || ent.d || ent.t || "";
       const zhDef = st.showTrans && ent.t ? ent.t : "";
-      const sents = Lexicon.exampleSentences(item.key, 2);
       const groupLen = s.groups[s.gi].length;
 
       $("cardStage").innerHTML =
         '<div class="card sense-card">' +
         '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
         " · WORD " + (s.wi + 1) + "/" + groupLen + (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
-        '<span class="card-status learn">SENSE · LISTEN & MEANING</span>' +
-        '<div class="sense-label">HEAR THE WORD — STUDY ITS SENSES (WORD HIDDEN)</div>' +
-        '<div class="sense-list">' + senseList + "</div>" +
+        '<span class="card-status learn">SENSE SCENE</span>' +
+        '<div class="sense-label">SEE THE WORD IN ACTION — A REAL SCENE</div>' +
+        (sceneHtml || '<div class="card-def big">' + this.esc(mainDef) + "</div>") +
+        '<div class="card-def" style="margin-top:10px">' + this.esc(mainDef) + "</div>" +
         (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
-        (sents.length ? '<div class="card-example">“' + this.esc(this.blankWord(sents[0], ent.w)) + '”</div>' : "") +
         '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ PLAY WORD AUDIO</button></div>' +
         '<div class="step-bar"><button class="btn btn-primary" id="btnPhaseNext">CONTINUE TO SPELL ▸</button></div>' +
-        '<div class="card-index">AUDIO PLAYS AUTOMATICALLY — LISTEN AND REMEMBER</div>' +
+        '<div class="card-index">AUDIO PLAYS AUTOMATICALLY — SCENE LEAVES BEFORE SPELLING</div>' +
         "</div>";
       $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
       $("btnPhaseNext").addEventListener("click", () => {
@@ -504,6 +506,11 @@
     blankWord(sentence, word) {
       const re = new RegExp("\\b" + Lexicon.stem(word.toLowerCase()) + "[a-z]*\\b", "gi");
       return String(sentence).replace(re, "______");
+    },
+
+    highlightWord(sentence, word) {
+      const re = new RegExp("\\b" + Lexicon.stem(word.toLowerCase()) + "[a-z]*\\b", "gi");
+      return String(sentence).replace(re, '<span class="scene-word">$&</span>');
     },
 
     finishWord() {
