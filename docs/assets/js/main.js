@@ -355,7 +355,10 @@
         '<div class="card-index">SCENE AUDIO PLAYS AUTOMATICALLY — HEAR IT IN CONTEXT</div>' +
         "</div>";
       const sceneAudio = sceneSents[0] || ent.w;
+      // hover = instant audio preview
+      $("btnScene").addEventListener("mouseenter", () => this.speak(sceneAudio));
       $("btnScene").addEventListener("click", () => this.speak(sceneAudio));
+      $("btnWord").addEventListener("mouseenter", () => this.speak(ent.w));
       $("btnWord").addEventListener("click", () => this.speak(ent.w));
       $("btnPhaseNext").addEventListener("click", () => {
         s.phase = "spell";
@@ -397,7 +400,9 @@
         '<div class="card-index">WORD LENGTH SHOWN · ENTER CHECK · SPACE RE-HEAR</div>' +
         "</div>";
       const sceneSents = Lexicon.exampleSentences(item.key, 1);
+      $("btnWord2").addEventListener("mouseenter", () => this.speak(ent.w));
       $("btnWord2").addEventListener("click", () => this.speak(ent.w));
+      $("btnScene2").addEventListener("mouseenter", () => this.speak(sceneSents[0] || ent.w));
       $("btnScene2").addEventListener("click", () => this.speak(sceneSents[0] || ent.w));
       const input = $("typingInput");
       input.focus();
