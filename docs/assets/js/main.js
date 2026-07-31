@@ -43,6 +43,8 @@
     /* ================= init ================= */
     init() {
       Lexicon.load();
+      CloudSync.init();
+      CloudSync.onStatus = (msg) => this.setCloudStatus(msg);
       // wire suite module progress reporting
       global.Listening.onProgress = Suite.record.bind(Suite);
       global.ListeningFull.onProgress = Suite.record.bind(Suite);
@@ -60,6 +62,34 @@
       this.startClock();
       Telemetry.initMap($("mapCanvas"));
       Telemetry.drawChart($("chartCanvas"));
+      this.cloudInit();
+    },
+
+    /* ================= cloud sync ================= */
+    cloudInit() {
+      if (!CloudSync.enabled) {
+        this.setCloudStatus("CLOUD SYNC OFF — ENABLE IT IN CONFIG");
+        return;
+      }
+      this.setCloudStatus("PULLING CLOUD COPY…");
+      CloudSync.pull().then((r) => {
+        if (r.ok) {
+          this.renderAll();
+          this.renderDeck();
+          if (this.view === "listen") Suite.renderModule("listen", $("listenContainer"));
+          if (this.view === "read") Suite.renderModule("read", $("readContainer"));
+          if (this.view === "write") Suite.renderModule("write", $("writeContainer"));
+          this.setCloudStatus("SYNCED — CLOUD COPY LOADED (" + (r.at || "").slice(0, 10) + ")");
+        } else if (r.reason === "HTTP 404") {
+          this.setCloudStatus("NO CLOUD COPY YET — SAVE CONFIG WITH AUTO SYNC ON TO SEED IT");
+        } else {
+          this.setCloudStatus("PULL FAILED (" + r.reason + ") — USING LOCAL DATA");
+        }
+      });
+    },
+    setCloudStatus(msg) {
+      const el = $("cloudStatus");
+      if (el) el.textContent = msg;
     },
 
     /* ================= tabs ================= */
@@ -969,6 +999,9 @@
         $("cfgRate").value = s.rate;
         this.fillVoiceSelect($("cfgVoiceName"), s.voiceName || "");
         $("cfgGoalAuto").checked = !!s.goalAuto;
+        $("cfgCloud").checked = CloudSync.enabled;
+        $("cfgToken").value = CloudSync.token;
+        this.setCloudStatus("LAST SYNC: " + (CloudSync.lastSync() ? CloudSync.lastSync().slice(0, 10) : "NEVER"));
         const m = this.ddlMetrics();
         const hint = $("cfgGoalHint");
         if (hint) {
@@ -993,8 +1026,31 @@
         s.voiceName = $("cfgVoiceName").value || "";
         s.rate = parseFloat($("cfgRate").value) || 0.9;
         Lexicon.saveState();
+        // cloud sync settings — enable + seed, or disable
+        CloudSync.setEnabled($("cfgCloud").checked);
+        CloudSync.saveToken($("cfgToken").value.trim());
+        if (CloudSync.enabled && CloudSync.token) {
+          this.setCloudStatus("SAVED — PUSHING LOCAL DATA…");
+          CloudSync.push().then((r) => {
+            this.setCloudStatus(r.ok ? "SYNCED — CLOUD PUSHED (" + (r.at || "").slice(0, 10) + ")" : "PUSH FAILED — " + r.reason);
+          });
+        } else {
+          this.setCloudStatus("CLOUD SYNC OFF — LOCAL ONLY");
+        }
         $("settingsModal").hidden = true;
         this.renderAll();
+      });
+      $("btnCloudSync").addEventListener("click", () => {
+        CloudSync.setEnabled($("cfgCloud").checked);
+        CloudSync.saveToken($("cfgToken").value.trim());
+        if (CloudSync.enabled && CloudSync.token) {
+          this.setCloudStatus("PUSHING…");
+          CloudSync.push().then((r) => {
+            this.setCloudStatus(r.ok ? "PUSHED (" + (r.at || "").slice(0, 10) + ")" : "PUSH FAILED — " + r.reason);
+          });
+        } else {
+          this.setCloudStatus("CLOUD SYNC OFF — CHECK THE TOKEN");
+        }
       });
       $("btnCfgCancel").addEventListener("click", () => { $("settingsModal").hidden = true; });
       $("btnCfgReset").addEventListener("click", () => {

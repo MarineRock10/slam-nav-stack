@@ -106,6 +106,9 @@
 
     get(word) { return this.load().get(String(word).toLowerCase()) || null; },
 
+    /* rebuild the merged lexicon map after external data changes (cloud sync) */
+    refresh() { _lexicon = null; return this.load(); },
+
     /* ---- card state ---- */
     cards() {
       if (!_cards) _cards = readLS(LS_CARDS, {});

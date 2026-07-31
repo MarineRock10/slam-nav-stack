@@ -229,6 +229,22 @@
           <input type="range" id="cfgRate" min="0.6" max="1.4" step="0.05" value="0.9">
         </div>
       </details>
+      <details class="cfg-fold">
+        <summary>CLOUD SYNC (GITHUB TELEMETRY DATABASE)</summary>
+        <div class="form-row">
+          <label class="chk"><input type="checkbox" id="cfgCloud"> AUTO SYNC WITH GITHUB</label>
+          <div class="cfg-hint">EVERY PAGE LOAD PULLS THE CLOUD COPY (CLOUD WINS); EVERY STUDY/SETTING CHANGE PUSHES BACK AUTOMATICALLY. STORED IN <b>data/progress.json</b> IN THIS REPO — OPEN THE SAME PAGE ON ANY DEVICE AND YOUR DATA FOLLOWS.</div>
+        </div>
+        <div class="form-row">
+          <label for="cfgToken">GITHUB TOKEN (FINE-GRAINED · CONTENTS READ+WRITE ON THIS REPO)</label>
+          <input type="password" id="cfgToken" class="input" placeholder="github_pat_...">
+          <div class="cfg-hint">CREATE AT GITHUB → SETTINGS → DEVELOPER SETTINGS → FINE-GRAINED TOKENS → REPOSITORY ACCESS: ONLY THIS REPO · PERMISSIONS: CONTENTS READ AND WRITE. KEPT IN THIS BROWSER ONLY — DATA IS VISIBLE TO ANYONE WITH REPO ACCESS. REVOKE THE TOKEN IF COMPROMISED.</div>
+        </div>
+        <div class="form-row">
+          <button class="btn" id="btnCloudSync">SYNC NOW</button>
+          <div class="cfg-hint" id="cloudStatus">—</div>
+        </div>
+      </details>
       <div class="modal-actions">
         <button class="btn btn-primary" id="btnCfgSave">SAVE CONFIG</button>
         <button class="btn" id="btnCfgCancel">CANCEL</button>
@@ -272,6 +288,7 @@
 <script src="assets/js/suite/listening-full.js"></script>
 <script src="assets/js/suite/reading.js"></script>
 <script src="assets/js/suite/writing.js"></script>
+<script src="assets/js/cloud.js"></script>
 <script src="assets/js/main.js"></script>
 </body>
 </html>
