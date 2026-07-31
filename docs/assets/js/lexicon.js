@@ -21,7 +21,8 @@
   const DEFAULT_STATE = {
     settings: {
       goal: 25,                       // daily new-word target
-      examDate: "2026-12-15",         // mission deadline (YYYY-MM-DD)
+      examDate: "2026-11-15",         // target exam date (YYYY-MM-DD), user-adjustable
+      mode: "card",                   // "card" = flashcard, "typing" = spelling drill
       showTrans: true,                // show translations on cards
       voice: true,                    // TTS feedback
       rate: 0.9                       // speech rate
@@ -69,7 +70,7 @@
       for (let i = 0; i < bulk.length; i++) {
         const r = bulk[i];
         _lexicon.set(r[0].toLowerCase(), {
-          w: r[0], t: r[1] || "", us: r[2] || "", uk: r[3] || "", p: r[4] || 2,
+          w: r[0], t: r[1] || "", us: r[2] || "", uk: r[3] || "", p: r[4] == null ? 2 : r[4],
           d: "", e: ""
         });
       }
@@ -130,7 +131,16 @@
 
     /* ---- global state ---- */
     state() {
-      if (!_state) _state = Object.assign({}, DEFAULT_STATE, readLS(LS_STATE, {}));
+      if (!_state) {
+        _state = Object.assign({}, DEFAULT_STATE, readLS(LS_STATE, {}));
+        // deep-merge nested settings so newly added fields always exist
+        _state.settings = Object.assign({}, DEFAULT_STATE.settings, _state.settings);
+        // migrate legacy default (was the score-submission date, not the exam date)
+        if (_state.settings.examDate === "2026-12-15") {
+          _state.settings.examDate = DEFAULT_STATE.settings.examDate;
+          this.saveState();
+        }
+      }
       return _state;
     },
     saveState() { writeLS(LS_STATE, this.state()); },

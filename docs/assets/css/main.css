@@ -415,6 +415,7 @@ html, body {
 }
 .input:focus { outline: none; border-color: var(--accent); }
 input[type="date"], input[type="number"] { flex: none; }
+select.input { flex: none; min-width: 260px; background: var(--bg-panel2); color: var(--fg-bright); }
 
 .log-summary {
   display: flex;
@@ -459,6 +460,47 @@ input[type="date"], input[type="number"] { flex: none; }
   color: var(--fg-dim);
   font-size: 11px;
 }
+
+/* typing drill */
+.typing-card .card-def { margin-bottom: 8px; }
+.typing-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px auto 6px;
+  max-width: 480px;
+}
+.typing-prompt {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.typing-input {
+  flex: 1;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border-bright);
+  border-bottom: 2px solid var(--accent);
+  color: var(--fg-bright);
+  font-family: var(--font);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  padding: 8px 10px;
+  text-transform: lowercase;
+}
+.typing-input:focus { outline: none; border-color: var(--cyan); border-bottom-color: var(--cyan); }
+.typing-input[readonly] { opacity: 0.6; }
+.typing-feedback {
+  min-height: 22px;
+  margin: 4px auto 2px;
+  max-width: 480px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.typing-feedback.ok { color: var(--accent); }
+.typing-feedback.err { color: var(--red); }
 
 /* ---------------- modal ---------------- */
 .modal-backdrop {

@@ -149,8 +149,14 @@
       const s = this.session;
       if (!s) return;
       const item = s.queue[s.idx];
+      // typing drill mode: spelling input instead of self-grading
+      if ((Lexicon.state().settings.mode || "card") === "typing") {
+        this.renderTypingCard(item);
+        return;
+      }
       $("gradeBar").style.display = "grid";
       $("sessionDone").hidden = true;
+      this._typing = null;
 
       const total = s.queue.length;
       const pos = s.idx + 1;
@@ -184,6 +190,128 @@
         '<div class="card-index">' + pos + " / " + total + "</div>" +
         "</div>";
       $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
+    },
+
+    /* ---- typing drill mode (spelling input) ----
+     * Disguised as manual waypoint entry: definitions + blanked
+     * example are shown, the operator types the landmark name.
+     * Correct => auto GOOD; wrong/skip => answer revealed, then
+     * AGAIN (requeued at the end of the mission). */
+    _typing: null,
+
+    renderTypingCard(item) {
+      const s = this.session;
+      const total = s.queue.length;
+      const pos = s.idx + 1;
+      $("gradeBar").style.display = "none";
+      $("sessionDone").hidden = true;
+      this._typing = { item, submitted: false, correct: false, graded: false };
+
+      $("mcMode").textContent = item.isNew ? "MANUAL ENTRY: NEW" : "MANUAL ENTRY: REVIEW";
+      $("mcMeta").textContent = "WAYPOINTS: " + pos + " / " + total +
+        " · NEW " + s.newDone + " · REV " + s.revDone;
+      $("mcProgress").style.width = ((pos - 1) / total) * 100 + "%";
+
+      const ent = item.ent;
+      const card = Lexicon.getCard(item.key) || SRS.fresh();
+      const st = Lexicon.state().settings;
+
+      // blank the target word inside the example sentence
+      let example = ent.e || "";
+      if (example) {
+        const re = new RegExp("\\b" + this.escapeRegExp(ent.w) + "\\b", "gi");
+        example = example.replace(re, "______");
+      }
+
+      const defHtml = [];
+      if (ent.d) defHtml.push('<div class="card-def">' + this.esc(ent.d) + "</div>");
+      if (st.showTrans && ent.t) defHtml.push('<div class="card-def zh">' + this.esc(ent.t) + "</div>");
+      if (ent.e && !example.includes("______")) {
+        defHtml.push('<div class="card-example">“' + this.esc(ent.e) + '”</div>');
+      } else if (example) {
+        defHtml.push('<div class="card-example">“' + this.esc(example) + '”</div>');
+      }
+
+      const statusCls = card.lvl === 2 ? "mature" : card.lvl === 1 ? "learn" : "new";
+      const statusTxt = card.lvl === 2 ? "MATURE" : card.lvl === 1 ? "LEARNING" : "NEW";
+
+      $("cardStage").innerHTML =
+        '<div class="card typing-card">' +
+        '<span class="card-wp">WP-' + String(pos).padStart(4, "0") + " · " + ent.p + "</span>" +
+        '<span class="card-status ' + statusCls + '">' + statusTxt + "</span>" +
+        defHtml.join("") +
+        '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ HEAR PRONUNCIATION</button></div>' +
+        '<div class="typing-row">' +
+        '<span class="typing-prompt">WAYPOINT &gt;</span>' +
+        '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD...">' +
+        "</div>" +
+        '<div class="typing-feedback" id="typingFeedback"></div>' +
+        '<div class="card-index">' + pos + " / " + total +
+        " · ENTER CONFIRM · ESC SKIP</div>" +
+        "</div>";
+
+      $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
+      const input = $("typingInput");
+      input.focus();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this.submitTyping();
+        else if (e.key === "Escape") this.skipTyping();
+      });
+    },
+
+    submitTyping() {
+      const t = this._typing;
+      if (!t || t.graded) return;
+      const input = $("typingInput");
+      const fb = $("typingFeedback");
+      const target = t.item.ent.w.toLowerCase();
+
+      if (!t.submitted) {
+        t.submitted = true;
+        const ans = (input.value || "").trim().toLowerCase();
+        if (ans === target) {
+          t.correct = true;
+          fb.className = "typing-feedback ok";
+          fb.textContent = "✓ " + t.item.ent.w + " — CORRECT, ADVANCING";
+          input.readOnly = true;
+          setTimeout(() => {
+            if (this._typing === t && !t.graded) {
+              t.graded = true;
+              this.grade(2);
+            }
+          }, 1200);
+        } else {
+          t.correct = false;
+          fb.className = "typing-feedback err";
+          fb.textContent = "✗ EXPECTED: " + t.item.ent.w + " — PRESS ENTER TO CONTINUE";
+          input.readOnly = true;
+        }
+        return;
+      }
+      // second ENTER after a wrong answer: requeue the waypoint
+      t.graded = true;
+      this.grade(t.correct ? 2 : 0);
+    },
+
+    skipTyping() {
+      const t = this._typing;
+      if (!t || t.graded) return;
+      const input = $("typingInput");
+      const fb = $("typingFeedback");
+      if (!t.submitted) {
+        t.submitted = true;
+        t.correct = false;
+        fb.className = "typing-feedback err";
+        fb.textContent = "✗ SKIPPED — EXPECTED: " + t.item.ent.w + " — PRESS ENTER TO CONTINUE";
+        input.readOnly = true;
+      } else {
+        t.graded = true;
+        this.grade(0);
+      }
+    },
+
+    escapeRegExp(s) {
+      return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     },
 
     grade(q) {
@@ -341,6 +469,7 @@
         const s = Lexicon.state().settings;
         $("cfgGoal").value = s.goal;
         $("cfgExam").value = s.examDate;
+        $("cfgMode").value = s.mode || "card";
         $("cfgTrans").checked = s.showTrans;
         $("cfgVoice").checked = s.voice;
         $("cfgRate").value = s.rate;
@@ -349,7 +478,8 @@
       $("btnCfgSave").addEventListener("click", () => {
         const s = Lexicon.state().settings;
         s.goal = Math.max(1, Math.min(500, parseInt($("cfgGoal").value, 10) || 25));
-        s.examDate = $("cfgExam").value || "2026-12-15";
+        s.examDate = $("cfgExam").value || "2026-11-15";
+        s.mode = $("cfgMode").value === "typing" ? "typing" : "card";
         s.showTrans = $("cfgTrans").checked;
         s.voice = $("cfgVoice").checked;
         s.rate = parseFloat($("cfgRate").value) || 0.9;
