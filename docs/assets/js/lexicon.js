@@ -145,6 +145,73 @@
     },
     saveState() { writeLS(LS_STATE, this.state()); },
 
+    /* ---- real-context example index ----
+     * Builds word -> sentence(s) from the practice corpus (reading
+     * passages, listening transcripts, writing prompts, quick
+     * drills) so gap-fill exercises use authentic IELTS-style
+     * sentences instead of memorised lists. Indexed by stem. */
+    _exampleIndex: null,
+    _exampleIndexBuilt: false,
+
+    buildExampleIndex() {
+      if (this._exampleIndexBuilt) return this._exampleIndex;
+      this._exampleIndexBuilt = true;
+      this._exampleIndex = {};
+      const idx = this._exampleIndex;
+      const addSentence = (text) => {
+        const sents = String(text || "").split(/(?<=[.!?])\s+/);
+        for (const s of sents) {
+          const t = s.trim();
+          if (t.length < 25 || t.length > 140) continue;
+          const words = t.match(/[a-z][a-z'-]*/g) || [];
+          const keys = new Set(words.map((w) => this.stem(w.toLowerCase())));
+          for (const k of keys) {
+            if (k.length < 4) continue;
+            if (!idx[k]) idx[k] = [];
+            if (idx[k].length < 3 && !idx[k].includes(t)) idx[k].push(t);
+          }
+        }
+      };
+      const g = global;
+      ((g.READING_TESTS || [])).forEach((t) =>
+        t.passages.forEach((p) => p.paras.forEach((pa) => addSentence(pa.text))));
+      ((g.LISTENING_FULL || [])).forEach((s) =>
+        s.sections.forEach((sec) => addSentence(sec.transcript)));
+      ((g.LISTENING_SETS || [])).forEach((s) =>
+        s.items.forEach((i) => addSentence(i.audio || i.q || "")));
+      ((g.WRITING_TASKS || [])).forEach((t) => addSentence(t.prompt));
+      return idx;
+    },
+
+    stem(w) {
+      let s = w;
+      if (s.length <= 4) return s;
+      if (s.endsWith("ies")) return s.slice(0, -3) + "y";
+      if (s.endsWith("es")) return s.slice(0, -2);
+      if (s.endsWith("ed")) return s.slice(0, -2);
+      if (s.endsWith("ing")) return s.slice(0, -3);
+      if (s.endsWith("s") && !s.endsWith("ss")) return s.slice(0, -1);
+      if (s.endsWith("ly")) return s.slice(0, -2);
+      return s;
+    },
+
+    /* up to `limit` real sentences containing the word (any inflection) */
+    exampleSentences(word, limit) {
+      const idx = this.buildExampleIndex();
+      const key = this.stem(String(word).toLowerCase());
+      const out = [];
+      const re = new RegExp("\\b" + this.escapeRegExp(key) + "[a-z]*\\b", "i");
+      for (const s of (idx[key] || [])) {
+        if (re.test(s)) out.push(s);
+        if (out.length >= (limit || 2)) break;
+      }
+      return out;
+    },
+
+    escapeRegExp(s) {
+      return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    },
+
     /* ---- custom entries ---- */
     getCustom() {
       if (!_custom) _custom = readLS(LS_CUSTOM, {});

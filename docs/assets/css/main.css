@@ -725,13 +725,34 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 .card-example.big { font-size: 16px; line-height: 1.7; padding: 10px 0; }
 .step-bar { margin-top: 14px; }
 
-/* sense self-grade bar */
-#senseGrade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 640px; margin: 0 auto; }
-#senseGrade .grade-again { border-color: var(--red); color: var(--red); }
-#senseGrade .grade-hard { border-color: var(--amber); color: var(--amber); }
-#senseGrade .grade-good { border-color: var(--accent); color: var(--accent); }
-#gradeBar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-width: 640px; margin: 0 auto; }
-#gradeBar[hidden], #senseGrade[hidden] { display: none; }
+/* sense self-grade bar (auto-grading replaced manual; kept for reference)
+   #senseGrade { ... } */
+
+/* group learning */
+.card-def.big { font-size: 18px; line-height: 1.6; margin: 8px auto; max-width: 520px; }
+.spell-hint {
+  font-family: var(--font);
+  font-size: 22px;
+  letter-spacing: 0.2em;
+  color: var(--amber);
+  min-height: 28px;
+  margin-top: 6px;
+}
+.gr-list { text-align: left; max-width: 520px; margin: 10px auto; }
+.gr-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 120px;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 12px;
+}
+.gr-word { color: var(--fg-bright); font-weight: 700; }
+.gr-rate { font-size: 11px; letter-spacing: 0.06em; text-align: right; }
+.gr-rate.ok { color: var(--accent); }
+.gr-rate.warn { color: var(--amber); }
+.gr-rate.err { color: var(--red); }
 
 /* memory deck */
 .deck-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }

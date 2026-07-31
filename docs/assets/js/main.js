@@ -239,11 +239,16 @@
 
     startSession(reviewOnly) {
       const queue = this.buildQueue(reviewOnly);
-      this.session = { queue, idx: 0, newDone: 0, revDone: 0, failed: 0, startedAt: new Date().toISOString() };
+      const groups = this.groupQueue(queue);
+      this.session = {
+        queue, groups, gi: 0, wi: 0, phase: "meaning",
+        scores: {}, newDone: 0, revDone: 0, failed: 0,
+        startedAt: new Date().toISOString()
+      };
       this.vsub = "train";
       this.switchView("vocab");
       this.showSub();
-      if (queue.length === 0) {
+      if (groups.length === 0) {
         this.renderIdleConsole("NO WAYPOINTS QUEUED — TARGET REACHED. RETURN TO STATISTICS.");
       } else {
         this.renderCard();
@@ -254,8 +259,6 @@
       $("mcMode").textContent = "STANDBY";
       $("mcMeta").textContent = "WAYPOINTS: 0 / 0";
       $("mcProgress").style.width = "0%";
-      $("senseGrade").hidden = true;
-      $("senseGrade").hidden = true;
       $("cardStage").innerHTML =
         '<div class="card"><div class="card-word" style="font-size:20px">' +
         (msg || "NO ACTIVE MISSION") +
@@ -265,260 +268,319 @@
       $("trainActions").style.display = "";
     },
 
-    /* ---- card rendering: automatic flow ----
-     * Every card runs the full pipeline automatically:
-     *   1) SENSE UNDERSTAND — word + all senses
-     *   2) CONTEXT RECALL   — blanked example, reveal meaning
-     *   3) LISTEN & TYPE    — hear the word, type it from audio
-     * then self-grade UNSURE / PARTIAL / UNDERSTOOD. */
+    /* ---- group-based learning flow ----
+     * Words are grouped (different first letters per group) and each
+     * word runs: LISTEN & MEANING -> SPELL (letter-by-letter hints
+     * until written) -> GAP-FILL in real sentences. The word's
+     * overall success rate decides which memory-curve stage it
+     * enters (no manual self-grading). */
+    groupQueue(queue, size = 4) {
+      const groups = [];
+      const q = queue.slice();
+      while (q.length) {
+        const g = [];
+        const used = new Set();
+        for (let i = 0; i < q.length && g.length < size; i++) {
+          const it = q[i];
+          const f = String(it.key)[0];
+          if (!used.has(f)) { used.add(f); g.push(it); q.splice(i, 1); i--; }
+        }
+        if (g.length < size && q.length) g.push(q.shift());
+        groups.push(g);
+      }
+      return groups;
+    },
+
+    curWord() {
+      const s = this.session;
+      return s.groups[s.gi][s.wi];
+    },
+
     renderCard() {
       const s = this.session;
       if (!s) return;
-      const item = s.queue[s.idx];
       $("trainActions").style.display = "none";
       $("sessionDone").hidden = true;
-      this.renderSenseCard(item);
+      this.renderPhase();
     },
 
-    _meta(item, s) {
-      const total = s.queue.length;
-      const pos = s.idx + 1;
-      $("mcMode").textContent = (item.hot ? "HOT ZONE: " : "") + (item.isNew ? "NEW WAYPOINT" : "REVIEW");
-      $("mcMeta").textContent = "WAYPOINTS: " + pos + " / " + total +
-        " · NEW " + s.newDone + " · REV " + s.revDone + (item.hot ? " · 🔥 FLAGGED" : "");
-      $("mcProgress").style.width = ((pos - 1) / total) * 100 + "%";
-    },
-
-    /* ---- SENSE mode: understand -> recall -> spell ---- */
-    renderSenseCard(item) {
+    renderPhase() {
       const s = this.session;
-      const st = Lexicon.state().settings;
+      const item = this.curWord();
+      const totalWords = s.groups.reduce((n, g) => n + g.length, 0);
+      const pos = s.groups.slice(0, s.gi).reduce((n, g) => n + g.length, 0) + s.wi + 1;
+      $("mcMode").textContent = (item.hot ? "HOT ZONE: " : "") + (item.isNew ? "NEW WORD" : "REVIEW");
+      $("mcMeta").textContent = "GROUP " + (s.gi + 1) + "/" + s.groups.length +
+        " · WORD " + pos + "/" + totalWords + (item.hot ? " · 🔥 FLAGGED" : "");
+      $("mcProgress").style.width = ((pos - 1) / totalWords) * 100 + "%";
+      if (s.phase === "meaning") this.renderMeaning(item);
+      else if (s.phase === "spell") this.renderSpell(item);
+      else if (s.phase === "gap") this.renderGap(item);
+      else if (s.phase === "result") this.renderGroupResult();
+    },
+
+    /* ---- phase 1: listen + meaning (word hidden) ---- */
+    renderMeaning(item) {
+      const s = this.session;
       const ent = item.ent;
       const senses = Lexicon.senses(item.key);
-      const card = Lexicon.getCard(item.key) || SRS.fresh();
-      const statusCls = card.lvl === 2 ? "mature" : card.lvl === 1 ? "learn" : "new";
-      const statusTxt = card.lvl === 2 ? "MASTERED" : card.lvl === 1 ? "LEARNING" : "NEW";
-      this._sense = { item, step: 0, revealed: false };
-      this._meta(item, s);
-      $("senseGrade").hidden = true;
-      $("senseGrade").hidden = true;
-
-      const phonetic = ent.uk ? ("UK " + ent.uk + "  US " + (ent.us || "—")) : (ent.us ? "US " + ent.us : "");
-      const total = s.queue.length;
-      const pos = s.idx + 1;
-
-      // step 0: understand — word + all senses
-      const senseList = senses.map((sn, i) =>
-        '<div class="sense-item">' +
-        (sn.pos ? '<span class="sense-pos">' + this.esc(sn.pos) + "</span>" : "") +
-        '<span class="sense-text">' + this.esc(sn.text) + "</span>" +
-        (sn.ex ? '<div class="sense-ex">“' + this.esc(sn.ex) + '”</div>' : "") +
-        "</div>").join("");
+      const st = Lexicon.state().settings;
+      const mainDef = (senses[0] && senses[0].text) || ent.d || ent.t || "";
+      const zhDef = st.showTrans && ent.t ? ent.t : "";
+      const sents = Lexicon.exampleSentences(item.key, 2);
+      const groupLen = s.groups[s.gi].length;
 
       $("cardStage").innerHTML =
         '<div class="card sense-card">' +
-        '<span class="card-wp">WP-' + String(pos).padStart(4, "0") + (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
-        '<span class="card-status ' + statusCls + '">' + statusTxt + "</span>" +
-        '<div class="card-word">' + this.esc(ent.w) + "</div>" +
-        (phonetic ? '<div class="card-phonetic">' + this.esc(phonetic) + "</div>" : "") +
-        '<div class="sense-list">' + senseList + "</div>" +
-        (st.showTrans && ent.t && !ent.d ? '<div class="card-def zh">' + this.esc(ent.t) + "</div>" : "") +
-        '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ SPEAK</button></div>' +
-        '<div class="card-index">STEP 1/3 · UNDERSTAND · ' + pos + " / " + total + "</div>" +
-        '<div class="step-bar"><button class="btn btn-primary" id="btnSenseNext">CONTINUE ▸</button></div>' +
-        "</div>";
-
-      $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
-      $("btnSenseNext").addEventListener("click", () => this.senseNext());
-    },
-
-    senseNext() {
-      const t = this._sense;
-      if (!t) return;
-      const ent = t.item.ent;
-      const st = Lexicon.state().settings;
-      const card = Lexicon.getCard(t.item.key) || SRS.fresh();
-      const statusCls = card.lvl === 2 ? "mature" : card.lvl === 1 ? "learn" : "new";
-      const statusTxt = card.lvl === 2 ? "MASTERED" : card.lvl === 1 ? "LEARNING" : "NEW";
-      const s = this.session;
-      const total = s.queue.length;
-      const pos = s.idx + 1;
-      const senses = Lexicon.senses(t.item.key);
-
-      if (t.step === 0) {
-        // step 1: context recall — example with the word blanked
-        const ex = ent.e;
-        if (!ex) { t.step = 1; this.senseNext(); return; }
-        t.step = 1;
-        const blanked = ex.replace(new RegExp("\\b" + this.escapeRegExp(ent.w) + "\\b", "gi"), "______");
-        $("cardStage").innerHTML =
-          '<div class="card sense-card">' +
-          '<span class="card-wp">WP-' + String(pos).padStart(4, "0") + "</span>" +
-          '<span class="card-status ' + statusCls + '">' + statusTxt + "</span>" +
-          '<div class="sense-label">RECALL THE WORD FROM CONTEXT</div>' +
-          '<div class="card-example big">“' + this.esc(blanked) + '”</div>' +
-          '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ SPEAK</button></div>' +
-          '<div class="card-index">STEP 2/3 · RECALL · ' + pos + " / " + total + "</div>" +
-          '<div class="step-bar"><button class="btn btn-primary" id="btnSenseNext">REVEAL ▸</button></div>' +
-          "</div>";
-        $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
-        $("btnSenseNext").addEventListener("click", () => this.senseNext());
-        return;
-      }
-      if (t.step === 1) {
-        // reveal the meaning, then move to audio typing
-        t.step = 2;
-        const senseList = senses.map((sn) =>
-          '<div class="sense-item">' +
-          (sn.pos ? '<span class="sense-pos">' + this.esc(sn.pos) + "</span>" : "") +
-          '<span class="sense-text">' + this.esc(sn.text) + "</span>" +
-          (sn.ex ? '<div class="sense-ex">“' + this.esc(sn.ex) + '”</div>' : "") +
-          "</div>").join("");
-        $("cardStage").innerHTML =
-          '<div class="card sense-card">' +
-          '<span class="card-wp">WP-' + String(pos).padStart(4, "0") + "</span>" +
-          '<span class="card-status ' + statusCls + '">' + statusTxt + "</span>" +
-          '<div class="card-word">' + this.esc(ent.w) + "</div>" +
-          '<div class="sense-list">' + senseList + "</div>" +
-          (st.showTrans && ent.t && !ent.d ? '<div class="card-def zh">' + this.esc(ent.t) + "</div>" : "") +
-          '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ SPEAK</button></div>' +
-          '<div class="card-index">STEP 2/3 · RECALL · ' + pos + " / " + total + "</div>" +
-          '<div class="step-bar"><button class="btn btn-primary" id="btnSenseNext">CONTINUE TO AUDIO TYPE ▸</button></div>' +
-          "</div>";
-        $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
-        $("btnSenseNext").addEventListener("click", () => this.senseNext());
-        return;
-      }
-      // step 3: LISTEN & TYPE — hear the word, type it from audio
-      t.step = 3;
-      const senseText = senses.map((sn) => sn.text).join(" · ");
-      $("cardStage").innerHTML =
-        '<div class="card sense-card typing-card">' +
-        '<span class="card-wp">WP-' + String(pos).padStart(4, "0") + "</span>" +
-        '<span class="card-status ' + statusCls + '">' + statusTxt + "</span>" +
-        '<div class="sense-label">HEAR THE WORD — TYPE WHAT YOU HEAR</div>' +
-        (senseText ? '<div class="card-def zh" style="font-size:12px">' + this.esc(senseText) + "</div>" : "") +
+        '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
+        " · WORD " + (s.wi + 1) + "/" + groupLen + (item.hot ? ' <span class="hot-dot">🔥</span>' : "") + "</span>" +
+        '<span class="card-status learn">LISTEN & MEANING</span>' +
+        '<div class="sense-label">HEAR THE WORD — MEANING BELOW (WORD HIDDEN)</div>' +
+        '<div class="card-def big">' + this.esc(mainDef) + "</div>" +
+        (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
+        (sents.length ? '<div class="card-example">“' + this.esc(this.blankWord(sents[0], ent.w)) + '”</div>' : "") +
         '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ PLAY WORD AUDIO</button></div>' +
-        '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
-        '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD YOU HEARD...">' +
-        "</div>" +
-        '<div class="typing-feedback" id="typingFeedback"></div>' +
-        '<div class="card-index">STEP 3/3 · AUDIO TYPE · ' + pos + " / " + total + " · ENTER CONFIRM</div>" +
+        '<div class="step-bar"><button class="btn btn-primary" id="btnPhaseNext">CONTINUE TO SPELL ▸</button></div>' +
+        '<div class="card-index">AUDIO PLAYS AUTOMATICALLY — LISTEN AND REMEMBER</div>' +
         "</div>";
       $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
-      const input = $("typingInput");
-      input.focus();
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") this.senseListenCheck();
-        else if (e.key === "Escape") this.senseSkipListen();
+      $("btnPhaseNext").addEventListener("click", () => {
+        s.phase = "spell";
+        this.renderPhase();
       });
-      // auto-play the word once so the learner listens first
       setTimeout(() => this.speak(ent.w), 350);
     },
 
-    senseListenCheck() {
-      const t = this._sense;
-      if (!t || t.graded) return;
+    /* ---- phase 2: spell with letter-by-letter hints ---- */
+    _hint: 0,
+
+    renderSpell(item) {
+      const s = this.session;
+      const ent = item.ent;
+      const groupLen = s.groups[s.gi].length;
+      this._hint = 0;
+      $("cardStage").innerHTML =
+        '<div class="card sense-card typing-card">' +
+        '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
+        " · WORD " + (s.wi + 1) + "/" + groupLen + "</span>" +
+        '<span class="card-status learn">SPELL</span>' +
+        '<div class="sense-label">TYPE THE WORD — FROM AUDIO & MEANING</div>' +
+        '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
+        '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="TYPE THE WORD...">' +
+        "</div>" +
+        '<div class="typing-feedback" id="typingFeedback"></div>' +
+        '<div class="spell-hint" id="spellHint"></div>' +
+        '<div class="card-index">ENTER CHECK · SPACE RE-HEAR · WRONG SPELLING REVEALS LETTERS</div>' +
+        "</div>";
+      const input = $("typingInput");
+      input.focus();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this.checkSpell();
+        else if (e.key === " ") { e.preventDefault(); this.speak(ent.w); }
+      });
+    },
+
+    checkSpell() {
+      const s = this.session;
+      const item = this.curWord();
+      const target = item.ent.w.toLowerCase();
       const input = $("typingInput");
       const fb = $("typingFeedback");
-      const target = t.item.ent.w.toLowerCase();
-      if (!t.listenDone) {
-        t.listenDone = true;
-        const ans = (input.value || "").trim().toLowerCase();
-        if (ans === target) {
-          t.listenOk = true;
-          fb.className = "typing-feedback ok";
-          fb.textContent = "✓ AUDIO RECALL CORRECT — SELF-GRADE BELOW";
-          input.readOnly = true;
-          // immediately show the self-grade buttons (no extra Enter needed)
-          $("senseGrade").hidden = false;
-          $("senseGrade").scrollIntoView({ block: "nearest" });
-        } else {
-          t.listenOk = false;
-          fb.className = "typing-feedback err";
-          fb.innerHTML = "✗ " + this.esc(t.item.ent.w) +
-            ' — <button class="tts-btn" id="btnHearAgain">◉ HEAR AGAIN</button> PRESS ENTER TO CONTINUE';
-          input.readOnly = true;
-          const ha = $("btnHearAgain");
-          if (ha) ha.addEventListener("click", () => this.speak(t.item.ent.w));
-        }
+      const hint = $("spellHint");
+      const ans = (input.value || "").trim().toLowerCase();
+
+      if (ans === target) {
+        const withHints = this._hint > 0;
+        s.scores[item.key] = { spell: withHints ? 0.5 : 1, gapOk: 0, gapTotal: 0 };
+        fb.className = "typing-feedback ok";
+        fb.textContent = "✓ CORRECT" + (withHints ? " (WITH " + this._hint + " LETTER HINT" + (this._hint > 1 ? "S" : "") + ")" : " — NO HINTS");
+        hint.textContent = "";
+        input.readOnly = true;
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") this.advanceToGap();
+        });
         return;
       }
-      // done with audio typing — now self-grade
-      $("senseGrade").hidden = false;
-      $("senseGrade").scrollIntoView({ block: "nearest" });
-      fb.textContent = "SELF-GRADE: UNSURE / PARTIAL / UNDERSTOOD";
-      fb.className = "typing-feedback";
+      // wrong: reveal one more letter
+      this._hint++;
+      const shown = target.slice(0, this._hint);
+      const rest = "_".repeat(Math.max(0, target.length - this._hint));
+      fb.className = "typing-feedback err";
+      fb.textContent = "✗ NOT QUITE — HINT " + this._hint + " OF " + target.length + ":";
+      hint.textContent = shown + rest;
+      input.value = "";
+      input.focus();
     },
 
-    senseSkipListen() {
-      const t = this._sense;
-      if (!t || t.graded) return;
+    advanceToGap() {
+      const s = this.session;
+      if (!s || s.phase !== "spell") return;
+      const item = this.curWord();
+      const sents = Lexicon.exampleSentences(item.key, 2);
+      if (!sents.length) {
+        // no real sentences: skip gap-fill
+        this.finishWord();
+        return;
+      }
+      this._gaps = sents;
+      this._gapIdx = 0;
+      s.phase = "gap";
+      this.renderPhase();
+    },
+
+    /* ---- phase 3: gap-fill in real sentences ---- */
+    _gaps: [],
+    _gapIdx: 0,
+
+    renderGap(item) {
+      const s = this.session;
+      const ent = item.ent;
+      const groupLen = s.groups[s.gi].length;
+      const sentence = this._gaps[this._gapIdx];
+      const blanked = this.blankWord(sentence, ent.w);
+
+      $("cardStage").innerHTML =
+        '<div class="card sense-card typing-card">' +
+        '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length +
+        " · WORD " + (s.wi + 1) + "/" + groupLen + "</span>" +
+        '<span class="card-status learn">GAP-FILL</span>' +
+        '<div class="sense-label">SECOND PASS — FILL THE GAP (' + (this._gapIdx + 1) + "/" + this._gaps.length + ")</div>" +
+        '<div class="card-example big">“' + this.esc(blanked) + '”</div>' +
+        '<div class="typing-row"><span class="typing-prompt">TYPE &gt;</span>' +
+        '<input type="text" id="typingInput" class="typing-input" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="FILL THE WORD...">' +
+        "</div>" +
+        '<div class="typing-feedback" id="typingFeedback"></div>' +
+        '<div class="card-index">ENTER CHECK · SPACE RE-HEAR</div>' +
+        "</div>";
+      const input = $("typingInput");
+      input.focus();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this.checkGap();
+        else if (e.key === " ") { e.preventDefault(); this.speak(ent.w); }
+      });
+      setTimeout(() => this.speak(ent.w), 300);
+    },
+
+    checkGap() {
+      const s = this.session;
+      const item = this.curWord();
+      const input = $("typingInput");
       const fb = $("typingFeedback");
-      if (!t.listenDone) {
-        t.listenDone = true;
-        t.listenOk = false;
-        fb.className = "typing-feedback err";
-        fb.innerHTML = "✗ " + this.esc(t.item.ent.w) +
-          ' — <button class="tts-btn" id="btnHearAgain">◉ HEAR AGAIN</button> PRESS ENTER TO CONTINUE';
-        $("typingInput").readOnly = true;
-        const ha = $("btnHearAgain");
-        if (ha) ha.addEventListener("click", () => this.speak(t.item.ent.w));
+      const sentence = this._gaps[this._gapIdx];
+      // compare against any word in the sentence matching the target stem
+      const re = new RegExp("\\b" + Lexicon.stem(item.ent.w.toLowerCase()) + "[a-z]*\\b", "i");
+      const expected = (sentence.match(re) || [item.ent.w])[0];
+      const ans = (input.value || "").trim().toLowerCase();
+      // accept the base word or any inflection (storm ~ stormwater)
+      const ok = this.norm(ans) === this.norm(expected) ||
+        Lexicon.stem(this.norm(ans)) === Lexicon.stem(this.norm(expected));
+      const sc = s.scores[item.key];
+      sc.gapTotal++;
+      if (ok) sc.gapOk++;
+      fb.className = "typing-feedback " + (ok ? "ok" : "err");
+      fb.textContent = ok ? "✓ FILLED CORRECTLY" : "✗ " + expected;
+      input.readOnly = true;
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this.gapNext();
+      });
+    },
+
+    gapNext() {
+      const s = this.session;
+      if (!s || s.phase !== "gap") return;
+      const item = this.curWord();
+      this._gapIdx++;
+      if (this._gapIdx >= this._gaps.length) this.finishWord();
+      else this.renderGap(item);
+    },
+
+    blankWord(sentence, word) {
+      const re = new RegExp("\\b" + Lexicon.stem(word.toLowerCase()) + "[a-z]*\\b", "gi");
+      return String(sentence).replace(re, "______");
+    },
+
+    finishWord() {
+      const s = this.session;
+      const item = this.curWord();
+      const sc = s.scores[item.key] || { spell: 0, gapOk: 0, gapTotal: 0 };
+      const total = 1 + (sc.gapTotal || 0);
+      const got = (sc.spell || 0) + (sc.gapOk || 0);
+      const rate = got / total;
+      const q = rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : rate >= 0.5 ? 1 : 0;
+      this.applyGrade(item, q);
+      s.wi++;
+      if (s.wi >= s.groups[s.gi].length) {
+        s.phase = "result";
+        this.renderPhase();
       } else {
-        this.grade(0);
+        s.phase = "meaning";
+        this.renderPhase();
       }
     },
 
-    senseGrade(q) {
-      const t = this._sense;
-      if (!t || t.graded) return;
-      t.graded = true;
-      // audio recall success boosts the grade one notch (UNSURE -> PARTIAL floor)
-      if (t.listenOk && q === 0) q = 1;
-      this.grade(q);
+    renderGroupResult() {
+      const s = this.session;
+      const group = s.groups[s.gi];
+      let rows = "";
+      let sum = 0;
+      for (const item of group) {
+        const sc = s.scores[item.key] || { spell: 0, gapOk: 0, gapTotal: 0 };
+        const total = 1 + (sc.gapTotal || 0);
+        const rate = (sc.spell || 0) + (sc.gapOk || 0);
+        const pct = Math.round((rate / total) * 100);
+        sum += pct;
+        const label = pct >= 90 ? "EASY" : pct >= 70 ? "GOOD" : pct >= 50 ? "HARD" : "AGAIN";
+        const cls = pct >= 70 ? "ok" : pct >= 50 ? "warn" : "err";
+        rows += '<div class="gr-row"><span class="gr-word">' + this.esc(item.ent.w) + "</span>" +
+          '<div class="statbar"><div class="statbar-fill" style="width:' + pct + '%"></div></div>' +
+          '<span class="gr-rate ' + cls + '">' + pct + "% · " + label + "</span></div>";
+      }
+      const groupPct = Math.round(sum / group.length);
+      $("mcMode").textContent = "GROUP COMPLETE";
+      $("mcMeta").textContent = "GROUP " + (s.gi + 1) + "/" + s.groups.length +
+        " · SUCCESS " + groupPct + "%";
+      $("cardStage").innerHTML =
+        '<div class="card sense-card">' +
+        '<span class="card-wp">GROUP ' + (s.gi + 1) + "/" + s.groups.length + "</span>" +
+        '<span class="card-status ' + (groupPct >= 70 ? "mature" : groupPct >= 50 ? "learn" : "new") + '">' +
+        (groupPct >= 90 ? "EXCELLENT" : groupPct >= 70 ? "GOOD" : groupPct >= 50 ? "REVIEW NEEDED" : "WEAK") + "</span>" +
+        '<div class="sense-label">GROUP SUCCESS RATE — WORDS PLACED ON THE MEMORY CURVE</div>' +
+        '<div class="gr-list">' + rows + "</div>" +
+        '<div class="step-bar"><button class="btn btn-primary" id="btnNextGroup">' +
+        (s.gi + 1 < s.groups.length ? "NEXT GROUP ▸" : "FINISH SESSION ▸") + "</button></div>" +
+        "</div>";
+      $("btnNextGroup").addEventListener("click", () => {
+        s.gi++;
+        s.wi = 0;
+        if (s.gi >= s.groups.length) { this.endSession(); return; }
+        s.phase = "meaning";
+        this.renderPhase();
+      });
     },
 
-    /* ---- grading ---- */
-    grade(q) {
+    /* auto-grading: SRS update + counters (no requeue — failed words
+     * come back through the normal due schedule) */
+    applyGrade(item, q) {
       const s = this.session;
-      if (!s) return;
-      const item = s.queue[s.idx];
       let card = Lexicon.getCard(item.key);
       if (!card) {
         card = SRS.fresh();
         card.added = Date.now();
       }
       const updated = SRS.review(card, q);
-      // weak words (failed twice in a row) auto-flag into the hot zone
       if (updated.weak >= 2 && !Lexicon.isUnfamiliar(item.key)) {
         Lexicon.addUnfamiliar(item.key, "weak");
       }
       Lexicon.setCard(item.key, updated);
-
-      if (q === 0) {
-        s.failed++;
-        s.queue.push({ key: item.key, ent: item.ent, card: updated, isNew: false, hot: Lexicon.isUnfamiliar(item.key) });
-      } else {
-        if (item.isNew) s.newDone++;
-        else s.revDone++;
-      }
-      s.idx++;
-      this._sense = null;
-      this._typing = null;
-
-      if (s.idx >= s.queue.length) {
-        this.endSession();
-      } else {
-        this.renderCard();
-      }
+      if (q === 0) s.failed++;
+      else if (item.isNew) s.newDone++;
+      else s.revDone++;
     },
 
     endSession() {
       const s = this.session;
       Lexicon.logStudy(s.newDone, s.revDone);
       WordAnnotate.refresh();
-      $("senseGrade").hidden = true;
-      $("senseGrade").hidden = true;
       $("mcProgress").style.width = "100%";
       $("mcMode").textContent = "MISSION COMPLETE";
       $("mcMeta").textContent = "NEW " + s.newDone + " · REVIEW " + s.revDone + " · RETRY " + s.failed;
@@ -633,7 +695,11 @@
       const due = Lexicon.dueCards().filter((d) => d.key !== key);
       const queue = due.map((d) => ({ key: d.key, ent: Lexicon.get(d.key), card: d.card, isNew: false, hot: Lexicon.isUnfamiliar(d.key) }));
       queue.unshift({ key, ent, card, isNew: false, hot: Lexicon.isUnfamiliar(key) });
-      this.session = { queue, idx: 0, newDone: 0, revDone: 0, failed: 0 };
+      const groups = this.groupQueue(queue);
+      this.session = {
+        queue, groups, gi: 0, wi: 0, phase: "meaning",
+        scores: {}, newDone: 0, revDone: 0, failed: 0
+      };
       this.vsub = "train";
       this.switchView("vocab");
       this.showSub();
@@ -776,10 +842,6 @@
       $("btnStart").addEventListener("click", () => this.startSession(false));
       $("btnReview").addEventListener("click", () => this.startSession(true));
       $("btnDoneReturn").addEventListener("click", () => this.switchView("stats"));
-      // sense self-grade buttons (single binding — the generic .grade
-      // selector would double-bind these and grade twice per click)
-      document.querySelectorAll("#senseGrade .grade").forEach((b) =>
-        b.addEventListener("click", () => this.senseGrade(parseInt(b.dataset.q, 10))));
       document.querySelectorAll("#dkFilter .deck-f").forEach((b) =>
         b.addEventListener("click", () => {
           this._deckFilter = b.dataset.f;
@@ -815,19 +877,20 @@
           return;
         }
         // typing in an editable field must not trigger shortcuts — but a
-        // read-only input (after a wrong spelling) still lets SPACE
-        // replay the word audio before continuing
+        // read-only input still lets SPACE replay audio and ENTER advance
+        // the phase (fallback when the input loses focus)
         if (e.target && /input|textarea/i.test(e.target.tagName)) {
-          if (!(e.key === " " && e.target.readOnly)) return;
+          if (!((e.key === " " || e.key === "Enter") && e.target.readOnly)) return;
         }
         if (this.session && this.view === "vocab" && this.vsub === "train") {
           const k = e.key;
-          if (k === "1") this.senseGrade(0);
-          else if (k === "2") this.senseGrade(1);
-          else if (k === "3") this.senseGrade(2);
-          else if (k === " ") {
+          if (k === "Enter") {
             e.preventDefault();
-            const item = this.session.queue[this.session.idx];
+            if (this.session.phase === "spell") this.advanceToGap();
+            else if (this.session.phase === "gap") this.gapNext();
+          } else if (k === " ") {
+            e.preventDefault();
+            const item = this.curWord();
             if (item) this.speak(item.ent.w);
           }
         }
@@ -845,6 +908,9 @@
     },
 
     /* ================= utils ================= */
+    norm(s) {
+      return String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    },
     esc(s) {
       return String(s).replace(/[&<>"']/g, (c) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
