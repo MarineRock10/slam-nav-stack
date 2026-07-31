@@ -348,16 +348,21 @@
         (sceneHtml || '<div class="card-def big">' + this.esc(mainDef) + "</div>") +
         '<div class="card-def" style="margin-top:10px">' + this.esc(mainDef) + "</div>" +
         (zhDef ? '<div class="card-def zh">' + this.esc(zhDef) + "</div>" : "") +
-        '<div class="card-tts"><button class="tts-btn" id="btnSpeak">◉ PLAY WORD AUDIO</button></div>' +
+        '<div class="card-tts">' +
+        '<button class="tts-btn" id="btnScene">◉ PLAY SCENE</button> ' +
+        '<button class="tts-btn" id="btnWord">◉ WORD ONLY</button></div>' +
         '<div class="step-bar"><button class="btn btn-primary" id="btnPhaseNext">CONTINUE TO SPELL ▸</button></div>' +
-        '<div class="card-index">AUDIO PLAYS AUTOMATICALLY — SCENE LEAVES BEFORE SPELLING</div>' +
+        '<div class="card-index">SCENE AUDIO PLAYS AUTOMATICALLY — HEAR IT IN CONTEXT</div>' +
         "</div>";
-      $("btnSpeak").addEventListener("click", () => this.speak(ent.w));
+      const sceneAudio = sceneSents[0] || ent.w;
+      $("btnScene").addEventListener("click", () => this.speak(sceneAudio));
+      $("btnWord").addEventListener("click", () => this.speak(ent.w));
       $("btnPhaseNext").addEventListener("click", () => {
         s.phase = "spell";
         this.renderPhase();
       });
-      setTimeout(() => this.speak(ent.w), 350);
+      // auto-play the whole scene sentence (falls back to the word)
+      setTimeout(() => this.speak(sceneAudio), 350);
     },
 
     /* ---- phase 2: spell with letter-by-letter hints ---- */
@@ -465,9 +470,10 @@
       input.focus();
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") this.checkGap();
-        else if (e.key === " ") { e.preventDefault(); this.speak(ent.w); }
+        else if (e.key === " ") { e.preventDefault(); this.speak(sentence); }
       });
-      setTimeout(() => this.speak(ent.w), 300);
+      // hear the whole sentence, then fill the gap
+      setTimeout(() => this.speak(sentence), 300);
     },
 
     checkGap() {
