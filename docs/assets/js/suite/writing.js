@@ -80,9 +80,13 @@
     state: null,      // { task, container }
     onProgress: null,
 
-    showTasks(container) {
+    showTasks(container, from) {
       const tasks = global.WRITING_TASKS || [];
-      let html = '<div class="suite-grid">';
+      let html = "";
+      if (from) {
+        html += '<div class="suite-head"><button class="btn" id="wrBackMod">◂ MODULE</button></div>';
+      }
+      html += '<div class="suite-grid">';
       for (const t of tasks) {
         html +=
           '<button class="suite-card" data-task="' + t.id + '">' +
@@ -97,6 +101,9 @@
         '<div class="panel-title"><span class="pt-dot"></span>BAND PHRASE BANK <span class="pt-tag">REFERENCE</span></div>' +
         '<div class="ph-bank">' + this.renderPhrases() + "</div></div>";
       container.innerHTML = html;
+      if (from) {
+        container.querySelector("#wrBackMod").addEventListener("click", () => Suite.renderModule("write", container));
+      }
       container.querySelectorAll(".suite-card").forEach((b) =>
         b.addEventListener("click", () => this.openTask(b.dataset.task, container)));
     },
@@ -133,7 +140,7 @@
         '<span class="pt-tag">' + (t.time || "") + "</span></div></div>" +
         '<div class="wr-layout">' +
         '<div class="panel"><div class="panel-title"><span class="pt-dot"></span>MISSION BRIEF</div>' +
-        '<div class="wr-prompt">' + this.esc(t.prompt) + "</div>" +
+        '<div class="wr-prompt" id="wrPrompt">' + (global.WordAnnotate ? WordAnnotate.annotate(t.prompt) : this.esc(t.prompt)) + "</div>" +
         '<div class="wr-meta">MIN WORDS ' + (t.min || "-") + (t.max ? " · MAX " + t.max : "") + "</div>" +
         '<div class="panel-title" style="margin-top:14px"><span class="pt-dot"></span>PHRASE BANK</div>' +
         '<div class="ph-bank ph-inline">' + this.renderPhrasesFor(t.type) + "</div></div>" +
@@ -152,6 +159,7 @@
         "</div>";
 
       c.querySelector("#wrBack").addEventListener("click", () => this.showTasks(c));
+      if (global.WordAnnotate) WordAnnotate.bind(c.querySelector("#wrPrompt"));
       const ta = c.querySelector("#wrText");
       const count = () => {
         const n = (ta.value.trim().match(/\S+/g) || []).length;

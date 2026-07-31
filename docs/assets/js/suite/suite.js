@@ -58,27 +58,20 @@
       const p = this.progress();
       const mods = [
         {
-          key: "quick", cls: "lsn",
-          title: "ACOUSTIC TELEMETRY — QUICK DRILLS",
-          sub: "SENTENCE-LEVEL · " + ((global.LISTENING_SETS || []).reduce((n, s) => n + s.items.length, 0)) + " ITEMS",
-          tag: this.modTag(p.listening.sets)
+          key: "listen", cls: "lsn",
+          title: "ACOUSTIC TELEMETRY",
+          sub: "LISTENING · 50 QUICK DRILLS + 8 FULL SECTIONS",
+          tag: this.modTag(p.listening.sets, p.listeningFull.sets)
         },
         {
-          key: "full", cls: "lsn",
-          title: "ACOUSTIC TELEMETRY — FULL SECTIONS",
-          sub: "FULL-LENGTH · " + (global.LISTENING_FULL || []).length + " TESTS / " +
-               (global.LISTENING_FULL || []).reduce((n, s) => n + s.sections.length, 0) + " SECTIONS",
-          tag: this.modTag(p.listeningFull.sets)
-        },
-        {
-          key: "reading", cls: "rd",
+          key: "read", cls: "rd",
           title: "SENSOR DATA PARSING",
           sub: "ACADEMIC READING · " + (global.READING_TESTS || []).length + " TESTS / " +
                (global.READING_TESTS || []).reduce((n, t) => n + t.passages.length, 0) + " PASSAGES",
           tag: this.modTag(p.reading.tests)
         },
         {
-          key: "writing", cls: "wr",
+          key: "write", cls: "wr",
           title: "MISSION REPORT GENERATOR",
           sub: "WRITING · " + (global.WRITING_TASKS || []).length + " TASKS + BAND PHRASE BANK",
           tag: this.modTag(p.writing.tasks)
@@ -102,20 +95,61 @@
         "</div>";
 
       container.querySelectorAll(".suite-card").forEach((b) =>
-        b.addEventListener("click", () => {
-          const k = b.dataset.mod;
-          const fn = { quick: "showSets", full: "showSets", reading: "showTests", writing: "showTasks" }[k];
-          if (k === "quick") Listening[fn](container);
-          else if (k === "full") ListeningFull[fn](container);
-          else if (k === "reading") Reading[fn](container);
-          else Writing[fn](container);
-        }));
+        b.addEventListener("click", () => this.renderModule(b.dataset.mod, container)));
     },
 
-    modTag(map) {
-      const keys = Object.keys(map);
+    /* ---- direct module entry (used by the 3 practice tabs) ---- */
+    renderModule(mod, container) {
+      const p = this.progress();
+      if (mod === "listen") {
+        const cards = [
+          {
+            key: "quick",
+            title: "QUICK DRILLS",
+            sub: "SENTENCE-LEVEL · " + ((global.LISTENING_SETS || []).reduce((n, s) => n + s.items.length, 0)) + " ITEMS",
+            tag: this.modTag(p.listening.sets)
+          },
+          {
+            key: "full",
+            title: "FULL SECTIONS",
+            sub: "FULL-LENGTH · " + (global.LISTENING_FULL || []).length + " TESTS / " +
+                 (global.LISTENING_FULL || []).reduce((n, s) => n + s.sections.length, 0) + " SECTIONS",
+            tag: this.modTag(p.listeningFull.sets)
+          }
+        ];
+        container.innerHTML =
+          '<div class="suite-head"><div class="suite-title">ACOUSTIC TELEMETRY' +
+          '<span class="pt-tag">TTS</span></div>' +
+          '<span class="suite-sub">DBL-CLICK ANY WORD IN TRANSCRIPTS TO FLAG IT</span></div>' +
+          '<div class="suite-grid">' +
+          cards.map((m) =>
+            '<button class="suite-card lsn" data-lk="' + m.key + '">' +
+            '<span class="suite-card-title">' + m.title + "</span>" +
+            '<span class="suite-card-sub">' + m.sub + "</span>" + m.tag +
+            "</button>"
+          ).join("") +
+          "</div>";
+        container.querySelectorAll(".suite-card").forEach((b) =>
+          b.addEventListener("click", () => {
+            if (b.dataset.lk === "quick") Listening.showSets(container, "listen");
+            else ListeningFull.showSets(container, "listen");
+          }));
+        return;
+      }
+      if (mod === "read") { Reading.showTests(container, "read"); return; }
+      if (mod === "write") { Writing.showTasks(container, "write"); return; }
+      this.render(container);
+    },
+
+    modTag(map, map2) {
+      const maps = map2 ? [map, map2] : [map];
+      const keys = [];
+      for (const m of maps) Object.keys(m).forEach((k) => keys.push(k));
       if (!keys.length) return '<span class="suite-card-tag">UNTESTED</span>';
-      const avg = keys.reduce((s, k) => s + map[k], 0) / keys.length;
+      const avg = keys.reduce((s, k) => {
+        for (const m of maps) if (m[k] !== undefined) return s + m[k];
+        return s;
+      }, 0) / keys.length;
       return '<span class="suite-card-done">✓ ' + keys.length + " · " + Math.round(avg) + "%</span>";
     }
   };

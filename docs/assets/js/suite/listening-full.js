@@ -13,10 +13,14 @@
     state: null,     // { set, section, idx }
     onProgress: null,
 
-    showSets(container) {
+    showSets(container, from) {
       const sets = global.LISTENING_FULL || [];
       const prog = global.Suite ? Suite.progress().listeningFull : null;
-      let html = '<div class="suite-grid">';
+      let html = "";
+      if (from) {
+        html += '<div class="suite-head"><button class="btn" id="lfBackMod">◂ MODULE</button></div>';
+      }
+      html += '<div class="suite-grid">';
       for (const s of sets) {
         const done = prog && prog.sets && prog.sets[s.id];
         html +=
@@ -28,6 +32,9 @@
       }
       html += "</div>";
       container.innerHTML = html;
+      if (from) {
+        container.querySelector("#lfBackMod").addEventListener("click", () => Suite.renderModule("listen", container));
+      }
       container.querySelectorAll(".suite-card").forEach((b) =>
         b.addEventListener("click", () => this.showSections(b.dataset.set, container)));
     },
@@ -104,9 +111,14 @@
         '<div class="audio-bar">' +
         '<button class="btn btn-primary" id="lfPlay">◉ PLAY TRANSCRIPT</button>' +
         '<button class="btn" id="lfStop">■ STOP</button>' +
+        '<button class="btn" id="lfShow">≣ SHOW TRANSCRIPT</button>' +
         '<span class="audio-rate">RATE <select id="lfRate" class="input"><option value="0.7">SLOW</option><option value="0.85" selected>NORMAL</option><option value="1">FAST</option></select></span>' +
         '<span class="audio-hint">FULL PASSAGE — ANSWER AS YOU LISTEN</span>' +
         "</div>" +
+        '<div class="transcript-panel panel" id="lfTrans" hidden>' +
+        '<div class="panel-title"><span class="pt-dot"></span>TRANSCRIPT <span class="pt-tag">DBL-CLICK TO FLAG</span></div>' +
+        '<div class="transcript-text" id="lfTransText"></div>' +
+        '<div class="unk-list" id="lfUnkList"></div></div>' +
         '<div class="qgroups">' + groupsHtml + "</div>" +
         '<div class="check-bar"><button class="btn btn-primary" id="lfCheck">CHECK ALL ANSWERS</button>' +
         '<button class="btn" id="lfNext" hidden>NEXT SECTION ▸</button></div>' +
@@ -115,6 +127,21 @@
       c.querySelector("#lfBack2").addEventListener("click", () => this.showSections(st.set.id, c));
       c.querySelector("#lfPlay").addEventListener("click", () => this.speak(sec.transcript));
       c.querySelector("#lfStop").addEventListener("click", () => { try { global.speechSynthesis.cancel(); } catch (e) {} });
+      c.querySelector("#lfShow").addEventListener("click", () => {
+        const tp = c.querySelector("#lfTrans");
+        tp.hidden = !tp.hidden;
+        if (!tp.hidden) {
+          c.querySelector("#lfTransText").innerHTML = global.WordAnnotate ? WordAnnotate.annotate(sec.transcript) : this.esc(sec.transcript);
+          const unk = global.WordAnnotate ? Array.from(WordAnnotate.unknownKeys(sec.transcript)) : [];
+          c.querySelector("#lfUnkList").innerHTML = unk.length
+            ? "<b>UNSTUDIED WORDS IN THIS TRANSCRIPT:</b> " + unk.slice(0, 40).map((w) =>
+                '<button class="unk-chip" data-w="' + w + '">' + w + "</button>").join("")
+            : "<b>NO UNSTUDIED WORDS — NICE.</b>";
+          c.querySelectorAll(".unk-chip").forEach((b) =>
+            b.addEventListener("click", () => WordAnnotate.showPanel(b.dataset.w)));
+          if (global.WordAnnotate) WordAnnotate.bind(c.querySelector("#lfTransText"));
+        }
+      });
       c.querySelector("#lfRate").addEventListener("change", (e) => { this._rate = parseFloat(e.target.value); });
       c.querySelector("#lfCheck").addEventListener("click", () => this.check());
       c.querySelector("#lfNext").addEventListener("click", () => this.nextSection());

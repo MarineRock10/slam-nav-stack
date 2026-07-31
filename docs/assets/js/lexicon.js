@@ -17,6 +17,7 @@
   const LS_CARDS = "sls_cards";
   const LS_STATE = "sls_state";
   const LS_CUSTOM = "sls_custom";
+  const LS_UNFAMILIAR = "sls_unfamiliar";
 
   const DEFAULT_STATE = {
     settings: {
@@ -152,6 +153,74 @@
     },
     saveCustom() { writeLS(LS_CUSTOM, this.getCustom()); },
 
+    /* ---- sense decomposition ----
+     * Splits a word's translation into structured senses so the
+     * learner studies meaning in context rather than rote lists.
+     * sense = { pos: part-of-speech tag, text: meaning, ex: example }
+     * Curated core words contribute an English definition + example. */
+    _POS_RE: /^(n|v|vt|vi|adj|adv|prep|conj|art|pron|num|aux|int|abbr)\./i,
+    senses(word) {
+      const ent = this.get(word);
+      if (!ent) return [];
+      const out = [];
+      const parts = String(ent.t || "").split(/[；;]/).map((s) => s.trim()).filter(Boolean);
+      const posOf = (s) => {
+        const m = s.match(this._POS_RE);
+        return m ? m[1].toUpperCase() : "";
+      };
+      if (ent.d) {
+        out.push({ pos: parts.length ? posOf(parts[0]) : "", text: ent.d, ex: ent.e || "" });
+        // remaining senses from the Chinese translation (skip the part already covered by d)
+        for (let i = 1; i < parts.length; i++) {
+          const t = parts[i].replace(this._POS_RE, "").trim();
+          if (t) out.push({ pos: posOf(parts[i]), text: t, ex: "" });
+        }
+      } else {
+        for (const part of parts) {
+          const t = part.replace(this._POS_RE, "").trim();
+          if (t) out.push({ pos: posOf(part), text: t, ex: "" });
+        }
+      }
+      return out;
+    },
+
+    /* ---- unfamiliar collection (memory deck hot zone) ----
+     * Words flagged in practice (dbl-click) or auto-flagged after
+     * repeated failures. src: "practice" | "weak" | "manual" */
+    getUnfamiliar() {
+      return readLS(LS_UNFAMILIAR, {});
+    },
+    saveUnfamiliar(d) { writeLS(LS_UNFAMILIAR, d); },
+    isUnfamiliar(word) {
+      return !!this.getUnfamiliar()[String(word).toLowerCase()];
+    },
+    addUnfamiliar(word, src) {
+      const d = this.getUnfamiliar();
+      const key = String(word).toLowerCase();
+      d[key] = { src: src || "manual", added: Date.now() };
+      this.saveUnfamiliar(d);
+    },
+    removeUnfamiliar(word) {
+      const d = this.getUnfamiliar();
+      delete d[String(word).toLowerCase()];
+      this.saveUnfamiliar(d);
+    },
+    unfamiliarList() {
+      return this.getUnfamiliar();
+    },
+    /* unfamiliar words with no card yet -> high-priority new items */
+    unfamiliarFresh() {
+      const cards = this.cards();
+      const out = [];
+      for (const key in this.getUnfamiliar()) {
+        if (!cards[key]) {
+          const ent = this.get(key);
+          if (ent) out.push({ key, ent });
+        }
+      }
+      return out;
+    },
+
     /* ---- study history / streak ---- */
     logStudy(newCount, reviewCount) {
       const st = this.state().stats;
@@ -169,8 +238,10 @@
       this.saveState();
     },
 
-    /* ---- new-word queue (priority order, excluding known cards) ---- */
-    newCandidates(limit, todayAdded) {
+    /* ---- new-word queue (priority order, excluding known cards) ----
+     * limit: daily new-word target; todayAdded: cards introduced
+     * today; reserved: slots already taken by flagged words. */
+    newCandidates(limit, todayAdded, reserved) {
       const cards = this.cards();
       const out = [];
       const now = Date.now();
@@ -179,7 +250,7 @@
         const c = cards[k];
         if (c.added && (now - c.added) < 86400000) todayAdded++;
       }
-      const need = Math.max(0, limit - todayAdded);
+      const need = Math.max(0, limit - todayAdded - (reserved || 0));
       if (need === 0) return out;
       // iterate priority tiers: core(0) -> extended(1) -> supplement(2)
       const seen = {};

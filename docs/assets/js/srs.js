@@ -24,7 +24,7 @@
 
     // create the default state for a newly introduced word
     fresh() {
-      return { reps: 0, ef: 2.5, ivl: 0, due: 0, lvl: 0, added: 0, seen: 0 };
+      return { reps: 0, ef: 2.5, ivl: 0, due: 0, lvl: 0, added: 0, seen: 0, weak: 0 };
     },
 
     // given a card state and a grade (0..3), return the updated state
@@ -38,8 +38,11 @@
         c.ef = Math.max(1.3, c.ef - 0.2);
         c.due = Date.now() + 10 * 60 * 1000; // re-show within the session
         c.lvl = 1; // still inside the learning loop, never back to "new"
+        c.weak = (c.weak || 0) + 1;         // weakness streak -> auto-flag
         return c;
       }
+
+      c.weak = 0; // success clears the weakness streak
 
       if (q === 1) { // HARD: nudge forward, no ease penalty
         c.reps += 1;
@@ -77,7 +80,17 @@
     },
     lvlLabel(lvl) {
       return lvl === 0 ? "NEW" : lvl === 1 ? "LEARNING" : "MATURE";
-    }
+    },
+
+    /* ---- memory-curve stage mapping (interval driven) ----
+     * new(0d) -> learning(<3d) -> consolidating(3-21d) -> mastered(>21d) */
+    stage(card) {
+      if (!card || !card.ivl) return "new";
+      if (card.ivl < 3) return "learning";
+      if (card.ivl <= 21) return "consolidating";
+      return "mastered";
+    },
+    STAGES: ["new", "learning", "consolidating", "mastered"]
   };
 
   global.SRS = SRS;

@@ -16,7 +16,7 @@
       <span class="logo-mark">◢◤</span>
       <span class="logo-text">SLAM-NAV-STACK</span>
       <span class="sb-sep">|</span>
-      <span class="sb-mode">FIELD NAV CONSOLE v2.4.1</span>
+      <span class="sb-mode">FIELD NAV CONSOLE v3.0.0</span>
     </div>
     <div class="sb-right">
       <span class="sb-item" id="sbClock">00:00:00</span>
@@ -28,26 +28,27 @@
 
   <!-- ==================== NAV TABS ==================== -->
   <nav class="tabs">
-    <button class="tab active" data-view="map">FIELD MAP</button>
-    <button class="tab" data-view="console">MISSION CONSOLE</button>
-    <button class="tab" data-view="log">SENSOR LOG</button>
-    <button class="tab" data-view="suite">ASSESSMENT SUITE</button>
+    <button class="tab active" data-view="stats">STATISTICS</button>
+    <button class="tab" data-view="vocab">VOCABULARY</button>
+    <button class="tab" data-view="listen">LISTENING</button>
+    <button class="tab" data-view="read">READING</button>
+    <button class="tab" data-view="write">WRITING</button>
     <span class="tabs-spacer"></span>
     <button class="tab tab-icon" id="btnSettings" title="SYSTEM CONFIG">⚙ CONFIG</button>
   </nav>
 
   <main class="content">
-    <!-- ==================== VIEW 1: FIELD MAP / DASHBOARD ==================== -->
-    <section id="view-map" class="view active">
+    <!-- ==================== VIEW 1: STATISTICS ==================== -->
+    <section id="view-stats" class="view active">
       <div class="grid-2col">
         <div class="panel">
-          <div class="panel-title"><span class="pt-dot"></span>FIELD MAP <span class="pt-tag">LIVE</span></div>
+          <div class="panel-title"><span class="pt-dot"></span>MEMORY CURVE <span class="pt-tag" id="stCurveTag">LIVE</span></div>
           <canvas id="mapCanvas" class="map-canvas"></canvas>
           <div class="map-legend">
-            <span><i class="lg lg-explored"></i>EXPLORED</span>
-            <span><i class="lg lg-frontier"></i>FRONTIER</span>
+            <span><i class="lg lg-explored"></i>LEARNING</span>
+            <span><i class="lg lg-frontier"></i>CONSOLIDATING</span>
+            <span><i class="lg lg-waypoint"></i>MASTERED</span>
             <span><i class="lg lg-obstacle"></i>UNSEEN</span>
-            <span><i class="lg lg-waypoint"></i>WAYPOINT</span>
           </div>
         </div>
 
@@ -83,76 +84,128 @@
           </div>
 
           <div class="panel">
-            <div class="panel-title"><span class="pt-dot"></span>TELEMETRY <span class="pt-tag">14D</span></div>
+            <div class="panel-title"><span class="pt-dot"></span>DAILY TELEMETRY <span class="pt-tag">14D</span></div>
             <canvas id="chartCanvas" class="chart-canvas"></canvas>
           </div>
         </div>
       </div>
 
-      <div class="action-bar">
-        <button class="btn btn-primary" id="btnStart">▸ START MISSION</button>
-        <button class="btn" id="btnReview">↻ REVIEW DUE</button>
-        <span class="action-hint">HINT: 1-4 GRADE · SPACE SPEAK · CTRL+SHIFT+M PLAIN MODE</span>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 2: MISSION CONSOLE / STUDY SESSION ==================== -->
-    <section id="view-console" class="view">
-      <div class="console-head">
-        <div class="panel-title"><span class="pt-dot"></span>MISSION CONSOLE <span class="pt-tag" id="mcMode">NAVIGATION</span></div>
-        <div class="console-meta" id="mcMeta">WAYPOINTS: 0 / 0</div>
-      </div>
-      <div class="console-progress">
-        <div class="statbar"><div class="statbar-fill" id="mcProgress"></div></div>
-      </div>
-
-      <div class="card-stage" id="cardStage">
-        <!-- Flashcard injected here -->
-      </div>
-
-      <div class="grade-bar" id="gradeBar">
-        <button class="btn grade grade-again" data-q="0">AGAIN</button>
-        <button class="btn grade grade-hard" data-q="1">HARD</button>
-        <button class="btn grade grade-good" data-q="2">GOOD</button>
-        <button class="btn grade grade-easy" data-q="3">EASY</button>
-      </div>
-      <div class="session-done" id="sessionDone" hidden>
-        <div class="done-symbol">◆</div>
-        <div class="done-title" id="doneTitle">MISSION COMPLETE</div>
-        <div class="done-sub" id="doneSub">--</div>
-        <button class="btn btn-primary" id="btnDoneReturn">↩ RETURN TO FIELD MAP</button>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 3: SENSOR LOG / WORD LIBRARY ==================== -->
-    <section id="view-log" class="view">
       <div class="panel">
-        <div class="panel-title"><span class="pt-dot"></span>SENSOR LOG — LEXICON INDEX <span class="pt-tag" id="lgCount">0 ENTRIES</span></div>
-        <div class="log-controls">
-          <input type="text" id="lgSearch" class="input" placeholder="SEARCH LEXICON... (e.g. 'abandon')" autocomplete="off">
-          <button class="btn" id="btnImport">⇪ IMPORT</button>
-          <button class="btn" id="btnExport">⇩ EXPORT</button>
-          <input type="file" id="fileImport" accept=".json,.csv" hidden>
+        <div class="panel-title"><span class="pt-dot"></span>MEMORY DECK DISTRIBUTION <span class="pt-tag" id="stDeckTag">0 WORDS</span></div>
+        <div class="stage-bars" id="stStageBars"></div>
+        <div class="panel-title" style="margin-top:12px"><span class="pt-dot"></span>MODULE STATS <span class="pt-tag">SUITE</span></div>
+        <div class="mod-stats" id="stModStats"></div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: VOCABULARY ==================== -->
+    <section id="view-vocab" class="view">
+      <nav class="tabs sub-tabs" id="vocabSubNav">
+        <button class="tab active" data-sub="train">TRAIN</button>
+        <button class="tab" data-sub="deck">MEMORY DECK</button>
+        <button class="tab" data-sub="lexicon">LEXICON</button>
+      </nav>
+
+      <!-- TRAIN: study session -->
+      <div id="vocabTrain" class="sub-view active">
+        <div class="console-head">
+          <div class="panel-title"><span class="pt-dot"></span>TRAINING CONSOLE <span class="pt-tag" id="mcMode">STANDBY</span></div>
+          <div class="console-meta" id="mcMeta">WAYPOINTS: 0 / 0</div>
         </div>
-        <div class="log-summary" id="lgSummary"></div>
-        <div class="log-list" id="lgList"></div>
-        <div class="log-pager" id="lgPager"></div>
+        <div class="console-progress">
+          <div class="statbar"><div class="statbar-fill" id="mcProgress"></div></div>
+        </div>
+        <div class="card-stage" id="cardStage"></div>
+        <div class="grade-bar" id="gradeBar" hidden>
+          <button class="btn grade grade-again" data-q="0">AGAIN</button>
+          <button class="btn grade grade-hard" data-q="1">HARD</button>
+          <button class="btn grade grade-good" data-q="2">GOOD</button>
+          <button class="btn grade grade-easy" data-q="3">EASY</button>
+        </div>
+        <div class="sense-grade" id="senseGrade" hidden>
+          <button class="btn grade grade-again" data-q="0">UNSURE</button>
+          <button class="btn grade grade-hard" data-q="1">PARTIAL</button>
+          <button class="btn grade grade-good" data-q="2">UNDERSTOOD</button>
+        </div>
+        <div class="session-done" id="sessionDone" hidden>
+          <div class="done-symbol">◆</div>
+          <div class="done-title" id="doneTitle">MISSION COMPLETE</div>
+          <div class="done-sub" id="doneSub">--</div>
+          <button class="btn btn-primary" id="btnDoneReturn">↩ RETURN TO STATISTICS</button>
+        </div>
+        <div class="action-bar" id="trainActions">
+          <button class="btn btn-primary" id="btnStart">▸ START DAILY MIX</button>
+          <button class="btn" id="btnReview">↻ REVIEW DUE</button>
+          <span class="action-hint">HINT: 1-3 GRADE · SPACE SPEAK · DBL-CLICK ANY WORD TO FLAG</span>
+        </div>
+      </div>
+
+      <!-- MEMORY DECK -->
+      <div id="vocabDeck" class="sub-view">
+        <div class="panel">
+          <div class="panel-title"><span class="pt-dot"></span>MEMORY DECK <span class="pt-tag" id="dkCount">0 WORDS</span></div>
+          <div class="deck-tabs" id="dkFilter">
+            <button class="btn deck-f active" data-f="all">ALL</button>
+            <button class="btn deck-f" data-f="hot">HOT ZONE</button>
+            <button class="btn deck-f" data-f="learning">LEARNING</button>
+            <button class="btn deck-f" data-f="consolidating">CONSOLIDATING</button>
+            <button class="btn deck-f" data-f="mastered">MASTERED</button>
+          </div>
+          <div class="log-summary" id="dkSummary"></div>
+          <div class="log-list" id="dkList"></div>
+          <div class="log-pager" id="dkPager"></div>
+        </div>
+      </div>
+
+      <!-- LEXICON: library -->
+      <div id="vocabLexicon" class="sub-view">
+        <div class="panel">
+          <div class="panel-title"><span class="pt-dot"></span>LEXICON INDEX <span class="pt-tag" id="lgCount">0 ENTRIES</span></div>
+          <div class="log-controls">
+            <input type="text" id="lgSearch" class="input" placeholder="SEARCH LEXICON... (e.g. 'abandon')" autocomplete="off">
+            <button class="btn" id="btnImport">⇪ IMPORT</button>
+            <button class="btn" id="btnExport">⇩ EXPORT</button>
+            <input type="file" id="fileImport" accept=".json,.csv" hidden>
+          </div>
+          <div class="log-summary" id="lgSummary"></div>
+          <div class="log-list" id="lgList"></div>
+          <div class="log-pager" id="lgPager"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: LISTENING ==================== -->
+    <section id="view-listen" class="view">
+      <div class="panel">
+        <div class="panel-title"><span class="pt-dot"></span>ACOUSTIC TELEMETRY <span class="pt-tag">TTS</span></div>
+        <div id="listenContainer"></div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 4: READING ==================== -->
+    <section id="view-read" class="view">
+      <div class="panel">
+        <div class="panel-title"><span class="pt-dot"></span>SENSOR DATA PARSING <span class="pt-tag">5 TESTS</span></div>
+        <div id="readContainer"></div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 5: WRITING ==================== -->
+    <section id="view-write" class="view">
+      <div class="panel">
+        <div class="panel-title"><span class="pt-dot"></span>MISSION REPORT GENERATOR <span class="pt-tag">WRITING</span></div>
+        <div id="writeContainer"></div>
       </div>
     </section>
   </main>
 
-    <!-- ==================== VIEW 4: ASSESSMENT SUITE ==================== -->
-    <section id="view-suite" class="view">
-      <div id="suiteContainer" class="panel"></div>
-    </section>
-
-    <!-- ==================== SETTINGS MODAL ==================== -->
+  <!-- ==================== SETTINGS MODAL ==================== -->
   <div class="modal-backdrop" id="settingsModal" hidden>
     <div class="modal">
       <div class="panel-title"><span class="pt-dot"></span>SYSTEM CONFIG</div>
       <div class="form-row">
         <label for="cfgGoal">DAILY NEW-WORD TARGET</label>
-        <input type="number" id="cfgGoal" class="input" min="1" max="200" value="25">
+        <input type="number" id="cfgGoal" class="input" min="1" max="500" value="25">
       </div>
       <div class="form-row">
         <label for="cfgExam">MISSION DEADLINE (YYYY-MM-DD)</label>
@@ -161,8 +214,9 @@
       <div class="form-row">
         <label for="cfgMode">LEARNING MODE</label>
         <select id="cfgMode" class="input">
-          <option value="card">FLASHCARD — SELF-GRADED REVIEW</option>
-          <option value="typing">TYPING DRILL — SPELLING INPUT</option>
+          <option value="sense">SENSE — UNDERSTAND / RECALL / SPELL</option>
+          <option value="card">FLASHCARD — SELF-GRADED</option>
+          <option value="typing">TYPING — SPELLING DRILL</option>
         </select>
       </div>
       <div class="form-row">
@@ -183,6 +237,20 @@
     </div>
   </div>
 
+  <!-- ==================== UNKNOWN WORD PANEL ==================== -->
+  <div class="modal-backdrop" id="unkModal" hidden>
+    <div class="modal">
+      <div class="panel-title"><span class="pt-dot"></span>UNKNOWN LEXEME <span class="pt-tag" id="unkTag">FLAG</span></div>
+      <div class="unk-word-big" id="unkWord">--</div>
+      <div class="unk-phonetic" id="unkPhonetic"></div>
+      <div class="unk-def" id="unkDef"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnUnkAdd">⇪ ADD TO MEMORY DECK</button>
+        <button class="btn" id="btnUnkClose">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
   <footer class="footer">
     <span>slam-nav-stack © 2026 · map fusion · odometry · waypoint navigation</span>
     <span>ROS2 Humble compatible · GPL-3.0</span>
@@ -194,6 +262,7 @@
 <script src="assets/js/srs.js"></script>
 <script src="assets/js/lexicon.js"></script>
 <script src="assets/js/telemetry.js"></script>
+<script src="assets/js/suite/word-annotate.js"></script>
 <script src="assets/js/suite/data-listening.js"></script>
 <script src="assets/js/suite/data-listening-full.js"></script>
 <script src="assets/js/suite/data-reading.js"></script>

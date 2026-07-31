@@ -23,10 +23,14 @@
     state: null,      // { test, passage, container }
     onProgress: null,
 
-    showTests(container) {
+    showTests(container, from) {
       const tests = global.READING_TESTS || [];
       const prog = global.Suite ? Suite.progress().reading : null;
-      let html = '<div class="suite-grid">';
+      let html = "";
+      if (from) {
+        html += '<div class="suite-head"><button class="btn" id="rdBackMod">◂ MODULE</button></div>';
+      }
+      html += '<div class="suite-grid">';
       for (const t of tests) {
         const done = prog && prog.tests && prog.tests[t.id];
         html +=
@@ -38,6 +42,9 @@
       }
       html += "</div>";
       container.innerHTML = html;
+      if (from) {
+        container.querySelector("#rdBackMod").addEventListener("click", () => Suite.renderModule("read", container));
+      }
       container.querySelectorAll(".suite-card").forEach((b) =>
         b.addEventListener("click", () => this.showPassages(b.dataset.test, container)));
     },
@@ -74,10 +81,25 @@
       const p = st.passage;
       const c = st.container;
       const test = st.test;
+      const annotate = global.WordAnnotate ? WordAnnotate.annotate.bind(WordAnnotate) : (t) => this.esc(t);
 
       const parasHtml = p.paras.map((pa) =>
         '<div class="rd-para"><span class="rd-para-key">' + pa.k + "</span><span class='rd-para-text'>" +
-        this.esc(pa.text) + "</span></div>").join("");
+        annotate(pa.text) + "</span></div>").join("");
+
+      // unstudied-word summary for this passage
+      let unkHtml = "";
+      if (global.WordAnnotate) {
+        const unkSet = new Set();
+        p.paras.forEach((pa) => WordAnnotate.unknownKeys(pa.text).forEach((w) => unkSet.add(w)));
+        const unk = Array.from(unkSet);
+        unkHtml = '<div class="unk-list" id="rdUnkList">' +
+          (unk.length
+            ? "<b>UNSTUDIED WORDS IN THIS PASSAGE — DBL-CLICK ANY TO FLAG:</b> " +
+              unk.slice(0, 60).map((w) => '<button class="unk-chip" data-w="' + w + '">' + w + "</button>").join("")
+            : "<b>NO UNSTUDIED WORDS — NICE.</b>") +
+          "</div>";
+      }
 
       let groupsHtml = "";
       p.groups.forEach((g, gi) => {
@@ -96,7 +118,7 @@
         "</div>" +
         '<div class="rd-layout">' +
         '<div class="rd-article panel"><div class="panel-title"><span class="pt-dot"></span>FIELD REPORT · TRANSMISSION ' +
-        (test.passages.indexOf(p) + 1) + "</div>" + parasHtml + "</div>" +
+        (test.passages.indexOf(p) + 1) + "</div>" + parasHtml + unkHtml + "</div>" +
         '<div class="rd-questions">' + groupsHtml +
         '<div class="check-bar"><button class="btn btn-primary" id="rdCheck">CHECK ALL ANSWERS</button>' +
         '<button class="btn" id="rdNext" hidden>NEXT PASSAGE ▸</button></div>' +
@@ -106,6 +128,11 @@
       c.querySelector("#rdBack2").addEventListener("click", () => this.showPassages(test.id, c));
       c.querySelector("#rdCheck").addEventListener("click", () => this.check());
       c.querySelector("#rdNext").addEventListener("click", () => this.nextPassage());
+      if (global.WordAnnotate) {
+        WordAnnotate.bind(c.querySelector(".rd-article"));
+        c.querySelectorAll(".unk-chip").forEach((b) =>
+          b.addEventListener("click", () => WordAnnotate.showPanel(b.dataset.w)));
+      }
     },
 
     renderGroup(g, gi) {

@@ -15,10 +15,14 @@
     onProgress: null,
 
     /* ============ navigation ============ */
-    showSets(container) {
+    showSets(container, from) {
       const sets = global.LISTENING_SETS || [];
       const prog = global.Suite ? Suite.progress().listening : null;
-      let html = '<div class="suite-grid">';
+      let html = "";
+      if (from) {
+        html += '<div class="suite-head"><button class="btn" id="lsnBackMod">◂ MODULE</button></div>';
+      }
+      html += '<div class="suite-grid">';
       for (const s of sets) {
         const done = prog && prog.sets && prog.sets[s.id];
         html +=
@@ -30,6 +34,9 @@
       }
       html += "</div>";
       container.innerHTML = html;
+      if (from) {
+        container.querySelector("#lsnBackMod").addEventListener("click", () => Suite.renderModule("listen", container));
+      }
       container.querySelectorAll(".suite-card").forEach((b) =>
         b.addEventListener("click", () => this.startSet(b.dataset.set, container)));
     },

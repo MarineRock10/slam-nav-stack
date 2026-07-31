@@ -684,6 +684,132 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   .ph-bank { grid-template-columns: 1fr; }
 }
 
+/* ============================================================
+ * v3 layout: sub-tabs, sense cards, memory deck, flags
+ * ============================================================ */
+.sub-tabs { border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.sub-view { display: none; }
+.sub-view.active { display: block; }
+.hot-dot { color: var(--amber); }
+.hot-badge { color: var(--amber); font-size: 11px; }
+
+/* sense cards */
+.sense-card .sense-label {
+  color: var(--cyan);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  margin-bottom: 10px;
+}
+.sense-list { text-align: left; margin: 10px auto; max-width: 520px; }
+.sense-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.sense-item:last-child { border-bottom: none; }
+.sense-pos {
+  flex: none;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--accent-dim);
+  padding: 1px 6px;
+  letter-spacing: 0.05em;
+}
+.sense-text { color: var(--fg); }
+.sense-ex { color: var(--fg-dim); font-style: italic; font-size: 12px; margin-top: 3px; width: 100%; }
+.card-example.big { font-size: 16px; line-height: 1.7; padding: 10px 0; }
+.step-bar { margin-top: 14px; }
+
+/* sense self-grade bar */
+#senseGrade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 640px; margin: 0 auto; }
+#senseGrade .grade-again { border-color: var(--red); color: var(--red); }
+#senseGrade .grade-hard { border-color: var(--amber); color: var(--amber); }
+#senseGrade .grade-good { border-color: var(--accent); color: var(--accent); }
+#gradeBar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-width: 640px; margin: 0 auto; }
+#gradeBar[hidden], #senseGrade[hidden] { display: none; }
+
+/* memory deck */
+.deck-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.deck-f.active { border-color: var(--accent); color: var(--accent); background: var(--bg-panel); }
+.dk-row {
+  display: grid;
+  grid-template-columns: 170px 1fr 130px 80px auto;
+  gap: 10px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  align-items: center;
+}
+.dk-row:hover { background: var(--bg-panel); }
+.dk-word { color: var(--fg-bright); font-weight: 700; }
+.dk-def { color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-stage { font-size: 9px; letter-spacing: 0.08em; padding: 1px 8px; border: 1px solid var(--border-bright); text-align: center; }
+.dk-stage.learning { color: var(--amber); border-color: var(--amber); }
+.dk-stage.consolidating { color: var(--cyan); border-color: var(--cyan); }
+.dk-stage.mastered { color: var(--accent); border-color: var(--accent-dim); }
+.dk-due { color: var(--fg-dim); font-size: 10px; }
+.dk-actions { display: flex; gap: 4px; }
+.dk-btn { padding: 3px 8px; font-size: 10px; }
+
+/* stage distribution bars */
+.stage-row { display: grid; grid-template-columns: 130px 1fr 50px; gap: 10px; align-items: center; margin-bottom: 6px; }
+.stage-label { color: var(--fg-dim); font-size: 10px; letter-spacing: 0.1em; }
+.stage-count { color: var(--fg-bright); font-size: 11px; text-align: right; }
+
+/* module stats */
+.mod-stats { display: flex; flex-direction: column; gap: 6px; }
+.mod-stat { display: grid; grid-template-columns: 180px 1fr 70px; gap: 10px; align-items: center; font-size: 11px; color: var(--fg-dim); }
+.mod-stat span:last-child { text-align: right; color: var(--fg-bright); }
+
+/* unknown word annotation */
+.unk-word {
+  border-bottom: 1px dotted var(--amber);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.unk-word:hover { background: rgba(255, 183, 51, 0.18); }
+.unk-list {
+  margin-top: 12px;
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  line-height: 2;
+}
+.unk-chip {
+  background: var(--bg-panel2);
+  border: 1px solid var(--border-bright);
+  color: var(--amber);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 2px 8px;
+  margin: 0 4px 4px 0;
+  cursor: pointer;
+}
+.unk-chip:hover { border-color: var(--amber); background: rgba(255, 183, 51, 0.12); }
+.transcript-panel { margin-bottom: 12px; }
+.transcript-text { line-height: 1.8; font-size: 13px; color: var(--fg); max-height: 360px; overflow-y: auto; }
+
+/* unknown word modal */
+.unk-word-big { font-size: 30px; font-weight: 700; color: var(--fg-bright); margin: 6px 0 2px; }
+.unk-phonetic { color: var(--cyan); font-size: 13px; margin-bottom: 10px; }
+.unk-def { margin-bottom: 6px; }
+
+/* train action bar */
+#trainActions { margin-top: 12px; }
+
+@media (max-width: 860px) {
+  .dk-row { grid-template-columns: 120px 1fr; }
+  .dk-stage, .dk-due, .dk-actions { grid-column: 1 / -1; }
+  .stage-row { grid-template-columns: 90px 1fr 40px; }
+  .mod-stat { grid-template-columns: 120px 1fr 50px; }
+}
+
 /* ---------------- modal ---------------- */
 .modal-backdrop {
   position: fixed;
