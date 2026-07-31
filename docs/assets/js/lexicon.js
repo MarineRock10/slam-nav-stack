@@ -162,8 +162,8 @@
         const sents = String(text || "").split(/(?<=[.!?])\s+/);
         for (const s of sents) {
           const t = s.trim();
-          if (t.length < 25 || t.length > 140) continue;
-          const words = t.match(/[a-z][a-z'-]*/g) || [];
+          if (t.length < 20 || t.length > 400) continue;
+          const words = t.match(/[A-Za-z][A-Za-z'-]*/g) || [];
           const keys = new Set(words.map((w) => this.stem(w.toLowerCase())));
           for (const k of keys) {
             if (k.length < 4) continue;
