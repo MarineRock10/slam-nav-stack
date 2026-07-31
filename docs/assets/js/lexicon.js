@@ -355,10 +355,14 @@
     exportBackup() {
       return JSON.stringify({
         app: "slam-nav-stack",
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         cards: this.cards(),
-        state: this.state()
+        state: this.state(),
+        unfamiliar: this.getUnfamiliar(),
+        custom: this.getCustom(),
+        suite: global.Suite ? Suite.progress() : null,
+        drafts: readLS("sls_drafts", {})
       }, null, 2);
     },
 
@@ -372,6 +376,21 @@
         _state = Object.assign({}, DEFAULT_STATE, data.state);
         this.saveState();
       }
+      if (data && data.unfamiliar) {
+        writeLS(LS_UNFAMILIAR, data.unfamiliar);
+      }
+      if (data && data.custom) {
+        _custom = data.custom;
+        this.saveCustom();
+      }
+      if (data && data.suite && global.Suite) {
+        Suite._data = data.suite;
+        Suite.save();
+      }
+      if (data && data.drafts) {
+        writeLS("sls_drafts", data.drafts);
+      }
+      this._lexicon = null;
       return data.cards ? Object.keys(data.cards).length : 0;
     },
 
