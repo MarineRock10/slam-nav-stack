@@ -333,7 +333,7 @@
       if (!sceneSents.length && ent.e) sceneSents.push(ent.e);
       const sceneHtml = sceneSents.map((s2, i) =>
         '<div class="scene-sentence">' + (sceneSents.length > 1 ? "<span class='scene-no'>" + (i + 1) + "</span>" : "") +
-        '<span class="scene-text">“' + this.esc(this.highlightWord(s2, ent.w)) + '”</span></div>'
+        '<span class="scene-text">“' + this.highlightWord(s2, ent.w) + '”</span></div>'
       ).join("");
       const mainDef = (senses[0] && senses[0].text) || ent.d || ent.t || "";
       const zhDef = st.showTrans && ent.t ? ent.t : "";
@@ -510,7 +510,7 @@
 
     highlightWord(sentence, word) {
       const re = new RegExp("\\b" + Lexicon.stem(word.toLowerCase()) + "[a-z]*\\b", "gi");
-      return String(sentence).replace(re, '<span class="scene-word">$&</span>');
+      return this.esc(String(sentence)).replace(re, '<span class="scene-word">$&</span>');
     },
 
     finishWord() {
