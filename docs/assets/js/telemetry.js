@@ -164,7 +164,8 @@
         days.push({ key, n: h.n || 0, r: h.r || 0 });
       }
       const maxN = Math.max(1, ...days.map((d) => d.n + d.r));
-      const padL = 28, padB = 18, padT = 8;
+      // top padding reserves room for the legend so bars never overlap it
+      const padL = 28, padB = 18, padT = 30;
       const plotW = w - padL - 8, plotH = h - padB - padT;
       const bw = plotW / 14;
 
@@ -179,15 +180,15 @@
         ctx.fillText(Math.round((maxN * g) / 4), 4, gy + 3);
       }
 
-      // legend (new vs review), telemetry-flavoured
+      // legend (two short lines, left-aligned)
       ctx.fillStyle = "#1d8f5c";
-      ctx.fillRect(4, padT, 6, 6);
+      ctx.fillRect(4, 8, 6, 6);
       ctx.fillStyle = "#ffb733";
-      ctx.fillRect(40, padT, 6, 6);
+      ctx.fillRect(4, 19, 6, 6);
       ctx.fillStyle = "#5f7187";
       ctx.font = "8px monospace";
-      ctx.fillText("WAYPOINT TELEMETRY · NEW", 13, padT + 6);
-      ctx.fillText("REVIEW", 49, padT + 6);
+      ctx.fillText("WAYPOINT TELEMETRY", 13, 14);
+      ctx.fillText("NEW / REVIEW", 13, 25);
 
       // stacked bars: new words below, reviews stacked on top
       for (let i = 0; i < 14; i++) {
