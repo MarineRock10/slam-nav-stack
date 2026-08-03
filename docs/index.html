@@ -95,13 +95,28 @@
                 <a href="#" id="stHotGo">OPEN DECK ▸</a>
               </div>
             </div>
+            <div class="queue-wrap" id="stQueueWrap">
+              <div class="statbar-label"><span>TODAY QUEUE</span><span id="stQueueText">--</span></div>
+              <div class="queue-bar" id="stQueueBar"><div class="queue-fill" id="stQueueFill"></div></div>
+              <div class="queue-legend">
+                <span><i class="qseg qseg-rev"></i>REVIEWS <b id="stQueueRev">0</b></span>
+                <span><i class="qseg qseg-hot"></i>HOT <b id="stQueueHot">0</b></span>
+                <span><i class="qseg qseg-new"></i>NEW <b id="stQueueNew">0</b></span>
+                <span class="queue-done">DONE <b id="stQueueDone">0</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title"><span class="pt-dot"></span>DAILY FLOW <span class="pt-tag" id="stFlowTag">TODAY</span></div>
+            <div class="flow-steps" id="stFlow"></div>
           </div>
         </div>
       </div>
 
       <div class="grid-2col">
         <div class="panel">
-          <div class="panel-title"><span class="pt-dot"></span>DAILY TELEMETRY <span class="pt-tag">14D</span></div>
+          <div class="panel-title"><span class="pt-dot"></span>DAILY TELEMETRY <span class="pt-tag">HIST / FORECAST</span></div>
           <canvas id="chartCanvas" class="chart-canvas"></canvas>
         </div>
         <div class="panel">

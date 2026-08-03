@@ -287,11 +287,70 @@ html, body {
 /* ---------------- charts ---------------- */
 .chart-canvas {
   width: 100%;
-  height: 150px;
+  height: 230px;
   display: block;
   background: var(--bg-panel2);
   border: 1px solid var(--border-bright);
 }
+
+/* ---------------- today queue (segmented progress) ---------------- */
+.queue-wrap { margin-top: var(--sp-3); }
+.queue-bar {
+  display: flex;
+  height: 8px;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.qseg-fill { display: block; height: 100%; }
+.queue-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-1);
+  color: var(--fg-dim);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.06em;
+}
+.queue-legend b { color: var(--fg-bright); }
+.qseg { display: inline-block; width: 8px; height: 8px; margin-right: var(--sp-1); }
+.qseg-rev { background: var(--amber); }
+.qseg-hot { background: var(--red); }
+.qseg-new { background: var(--cyan); }
+.queue-done { margin-left: auto; }
+
+/* ---------------- daily flow steps ---------------- */
+.flow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-2);
+}
+.flow-step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  padding: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+.flow-step[data-act] { cursor: pointer; transition: all 0.15s; }
+.flow-step[data-act]:hover { border-color: var(--accent); box-shadow: var(--glow); }
+.flow-num {
+  flex: none;
+  color: var(--fg-dim);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border-bright);
+  padding: 1px var(--sp-1);
+}
+.flow-body { display: flex; flex-direction: column; min-width: 0; }
+.flow-name { color: var(--fg-bright); font-weight: 700; font-size: var(--fs-base); letter-spacing: 0.06em; white-space: nowrap; }
+.flow-state { color: var(--fg-dim); font-size: var(--fs-tiny); letter-spacing: 0.04em; margin-top: 1px; }
+.flow-arrow { margin-left: auto; color: var(--accent); }
+.flow-rev .flow-name { color: var(--amber); }
+.flow-hot .flow-name { color: var(--red); }
+.flow-new .flow-name { color: var(--cyan); }
 
 /* ---------------- buttons ---------------- */
 .btn {
@@ -1037,6 +1096,7 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   .dk-stage, .dk-due, .dk-actions { grid-column: 1 / -1; }
   .stage-row { grid-template-columns: 90px 1fr 40px; }
   .mod-stat { grid-template-columns: 120px 1fr 50px; }
+  .flow-steps { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 560px) {
@@ -1067,4 +1127,6 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   .map-canvas { height: 220px; }
   .chart-canvas { height: 130px; }
   .footer { flex-direction: column; }
+  .flow-steps { grid-template-columns: 1fr; }
+  .queue-legend { gap: var(--sp-1) var(--sp-3); }
 }

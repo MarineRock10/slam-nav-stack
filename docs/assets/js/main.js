@@ -164,6 +164,7 @@
       this.renderStats();
       this.renderStages();
       this.renderModStats();
+      this.renderDailyFlow();
       Telemetry.drawChart($("chartCanvas"));
     },
 
@@ -269,16 +270,79 @@
         $("stHotCount").textContent = hot;
         $("stHotGo").onclick = (e) => {
           e.preventDefault();
-          this._deckFilter = "hot";
-          this._deckPage = 0;
-          this.vsub = "deck";
-          this.switchView("vocab");
-          document.querySelectorAll("#vocabSubNav .tab").forEach((b) =>
-            b.classList.toggle("active", b.dataset.sub === "deck"));
-          document.querySelectorAll("#dkFilter .deck-f").forEach((x) =>
-            x.classList.toggle("active", x.dataset.f === "hot"));
+          this.openHotDeck();
         };
       }
+
+      // ---- TODAY QUEUE: due reviews + remaining new budget, with progress ----
+      const qDue = counts.due;
+      const qNew = Math.max(0, effGoal - (hist.n || 0));
+      const qDone = (hist.n || 0) + (hist.r || 0);
+      const qTotal = qDue + qNew;
+      $("stQueueText").textContent = qDue + " REVIEWS + " + qNew + " NEW = " + qTotal + " · DONE " + qDone;
+      $("stQueueRev").textContent = qDue;
+      $("stQueueHot").textContent = hot;
+      $("stQueueNew").textContent = qNew;
+      $("stQueueDone").textContent = qDone;
+      const revW = qTotal ? (Math.min(qDue, hist.r || 0) / qTotal) * 100 : 0;
+      const newW = qTotal ? (Math.min(qNew, hist.n || 0) / qTotal) * 100 : 0;
+      $("stQueueFill").innerHTML =
+        '<i class="qseg-fill" style="width:' + revW + "%;background:var(--amber)\"></i>" +
+        '<i class="qseg-fill" style="width:' + newW + "%;background:var(--cyan)\"></i>";
+    },
+
+    /* open the vocab deck pre-filtered to the hot zone */
+    openHotDeck() {
+      this._deckFilter = "hot";
+      this._deckPage = 0;
+      this.vsub = "deck";
+      this.switchView("vocab");
+      document.querySelectorAll("#vocabSubNav .tab").forEach((b) =>
+        b.classList.toggle("active", b.dataset.sub === "deck"));
+      document.querySelectorAll("#dkFilter .deck-f").forEach((x) =>
+        x.classList.toggle("active", x.dataset.f === "hot"));
+    },
+
+    /* daily flow: today's four-step learning plan with live counts.
+     * REVIEW / NEW steps launch the matching sessions; HOT opens the deck. */
+    renderDailyFlow() {
+      const st = Lexicon.state();
+      const counts = Lexicon.cardCounts();
+      const hot = Object.keys(Lexicon.unfamiliarList()).length;
+      const effGoal = this.effectiveGoal(st);
+      const todayKey = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, "0") + "-" + String(new Date().getDate()).padStart(2, "0");
+      const hist = (st.stats.history || {})[todayKey] || { n: 0, r: 0, p: 0 };
+      const qNew = Math.max(0, effGoal - (hist.n || 0));
+
+      const step = (id, num, label, state, act) =>
+        '<div class="flow-step flow-' + id + '"' + (act ? ' data-act="' + act + '"' : "") + ">" +
+        '<span class="flow-num">' + num + "</span>" +
+        '<div class="flow-body"><span class="flow-name">' + label + "</span>" +
+        '<span class="flow-state">' + state + "</span></div>" +
+        '<span class="flow-arrow">' + (act ? "▸" : "") + "</span></div>";
+
+      const steps = [];
+      steps.push(step("rev", "01", "REVIEW DUE",
+        counts.due === 0 ? "ALL CLEAR ✓" : (hist.r || 0) + " / " + counts.due + " DONE",
+        counts.due > 0 ? "review" : null));
+      steps.push(step("hot", "02", "HOT ZONE",
+        hot === 0 ? "ALL CLEAR ✓" : hot + " FLAGGED",
+        hot > 0 ? "hot" : null));
+      steps.push(step("new", "03", "NEW WORDS",
+        qNew === 0 ? "GOAL MET ✓" : (hist.n || 0) + " / " + effGoal + " LEARNED",
+        qNew > 0 ? "new" : null));
+      steps.push(step("scene", "04", "SCENE SESSION",
+        "LISTEN · SPELL · FILL", null));
+
+      $("stFlow").innerHTML = steps.join("");
+      $("stFlow").querySelectorAll(".flow-step[data-act]").forEach((el) => {
+        el.addEventListener("click", () => {
+          const a = el.dataset.act;
+          if (a === "review") this.startSession(true);
+          else if (a === "new") this.startSession(false);
+          else if (a === "hot") this.openHotDeck();
+        });
+      });
     },
 
     renderStages() {

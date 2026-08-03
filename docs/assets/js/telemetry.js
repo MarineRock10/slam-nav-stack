@@ -13,14 +13,13 @@
     _chartCtx: null,
     _mapRAF: 0,
     _mapW: 0, _mapH: 0,
-    _robot: { x: 0.5, y: 0.5, ang: 0, trail: [] },
 
     /* ---------------- map ---------------- */
     initMap(canvas) {
       this._mapCtx = canvas.getContext("2d");
       this._mapCanvas = canvas;
       const draw = () => {
-        this.drawMap();
+        this.drawCurve();
         this._mapRAF = requestAnimationFrame(draw);
       };
       this._mapRAF = requestAnimationFrame(draw);
@@ -39,112 +38,159 @@
       return { w, h };
     },
 
-    drawMap() {
+    /* ---------------- memory curve (composite) ----------------
+     * 记忆曲线复合图：对数间隔轴 × 记忆保持率。
+     * 理论遗忘曲线（中位 EF）+ 阶段色带 + 词库分布泡 +
+     * 今日到期标记 + 巡游光标（延续 HUD 风格）。 */
+    drawCurve() {
       const ctx = this._mapCtx;
       if (!ctx || !this._mapCanvas) return;
       const S = this._setupCanvas(ctx, this._mapCanvas);
       if (!S) return;
+      const { w, h } = S;
 
-      const COLS = 34, ROWS = 16;
-      const cw = S.w / COLS, ch = S.h / ROWS;
-      const counts = Lexicon.cardCounts();
-      const total = Lexicon.size();
-      const learned = counts.new + counts.learning + counts.mature;
-      const frac = total ? learned / total : 0;
+      const padL = 34, padR = 12, padT = 26, padB = 22;
+      const plotW = w - padL - padR, plotH = h - padT - padB;
+      const LMIN = 0.5, LMAX = 64;
+      const lx = (ivl) => padL + ((Math.log2(Math.max(LMIN, ivl)) - Math.log2(LMIN)) /
+        (Math.log2(LMAX) - Math.log2(LMIN))) * plotW;
+      const ly = (ret) => padT + plotH - (ret / 100) * plotH;
+      const retention = (ivl, ef) => 100 * Math.exp(-ivl / (Math.max(1.3, ef) * 6));
 
       // bg
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg-panel2").trim() || "#111a26";
-      ctx.fillRect(0, 0, S.w, S.h);
+      ctx.fillRect(0, 0, w, h);
 
-      const cellAt = (i) => {
-        const rx = i % COLS, ry = Math.floor(i / COLS);
-        return { x: rx * cw, y: ry * ch, cx: rx * cw + cw / 2, cy: ry * ch + ch / 2 };
-      };
-
-      const exploredCount = Math.floor(frac * COLS * ROWS);
-      const t = Date.now() / 1000;
-
-      for (let i = 0; i < COLS * ROWS; i++) {
-        const c = cellAt(i);
-        if (i < exploredCount) {
-          // explored: subtle pulse on the frontier edge
-          const edge = i >= exploredCount - COLS;
-          ctx.fillStyle = edge ? "#173a4f" : "#155e3a";
-          ctx.fillRect(c.x + 0.5, c.y + 0.5, cw - 1, ch - 1);
-          if (edge && Math.sin(t * 2 + i) > 0.6) {
-            ctx.strokeStyle = "rgba(53,200,232,0.5)";
-            ctx.strokeRect(c.x + 0.5, c.y + 0.5, cw - 1, ch - 1);
-          }
-        } else {
-          // unseen obstacle
-          ctx.fillStyle = "#141d29";
-          ctx.fillRect(c.x + 0.5, c.y + 0.5, cw - 1, ch - 1);
-          ctx.strokeStyle = "#202e42";
-          ctx.strokeRect(c.x + 0.5, c.y + 0.5, cw - 1, ch - 1);
-        }
+      // stage bands: LEARNING <3d / CONSOLIDATING 3-21d / MASTERED >21d
+      const bands = [
+        { from: 0.5, to: 3, color: "rgba(255,183,51,0.055)" },
+        { from: 3, to: 21, color: "rgba(53,200,232,0.055)" },
+        { from: 21, to: 64, color: "rgba(51,255,153,0.055)" }
+      ];
+      for (const b of bands) {
+        ctx.fillStyle = b.color;
+        ctx.fillRect(lx(b.from), padT, lx(b.to) - lx(b.from), plotH);
+        ctx.strokeStyle = "rgba(44,64,88,0.6)";
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath(); ctx.moveTo(lx(b.to), padT); ctx.lineTo(lx(b.to), padT + plotH); ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      // waypoints: due reviews + recently learned, placed pseudo-randomly but stably
-      const seedRand = (k) => {
-        const x = Math.sin(k * 127.1 + 311.7) * 43758.5453;
-        return x - Math.floor(x);
-      };
-      const wps = counts.due + Math.min(8, counts.learning);
-      for (let k = 0; k < wps; k++) {
-        const cell = Math.floor(seedRand(k * 7 + 3) * exploredCount);
-        const c = cellAt(cell);
-        const pulse = 0.5 + 0.5 * Math.sin(t * 3 + k * 1.7);
-        ctx.beginPath();
-        ctx.arc(c.cx, c.cy, 2.5 + pulse * 2, 0, Math.PI * 2);
-        ctx.fillStyle = k < counts.due ? "#ff4d5e" : "#33ff99";
-        ctx.globalAlpha = 0.5 + 0.5 * pulse;
-        ctx.fill();
-        ctx.globalAlpha = 1;
+      // y grid 0..100%
+      ctx.fillStyle = "#5f7187";
+      ctx.font = "9px monospace";
+      for (let g = 0; g <= 4; g++) {
+        const gy = ly(g * 25);
+        ctx.strokeStyle = "#1c2a3a";
+        ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(w - padR, gy); ctx.stroke();
+        ctx.fillText(g * 25 + "%", 4, gy + 3);
       }
+      ctx.fillText("RETENTION", 4, padT - 10);
 
-      // robot with trail
-      const rb = this._robot;
-      rb.ang += 0.015;
-      rb.x += Math.cos(rb.ang) * 0.0035;
-      rb.y += Math.sin(rb.ang) * 0.0035;
-      if (rb.x < 0.04) rb.x = 0.04; if (rb.x > 0.96) rb.x = 0.96;
-      if (rb.y < 0.04) rb.y = 0.04; if (rb.y > 0.96) rb.y = 0.96;
-      rb.trail.push({ x: rb.x * S.w, y: rb.y * S.h });
-      if (rb.trail.length > 40) rb.trail.shift();
-      ctx.strokeStyle = "rgba(51,255,153,0.35)";
+      // x ticks (log spaced) + axis label
+      ctx.fillStyle = "#5f7187";
+      ctx.font = "9px monospace";
+      for (const t of [0.5, 1, 3, 6, 10, 21, 45]) {
+        ctx.fillText(t + "d", lx(t) - 6, h - 7);
+        ctx.strokeStyle = "#1c2a3a";
+        ctx.beginPath(); ctx.moveTo(lx(t), padT + plotH); ctx.lineTo(lx(t), padT + plotH + 4); ctx.stroke();
+      }
+      ctx.fillText("INTERVAL (DAYS)", padL, padT - 10);
+
+      // title
+      ctx.fillStyle = "rgba(53,200,232,0.85)";
+      ctx.font = "bold 10px monospace";
+      ctx.fillText("MEMORY CURVE :: RETENTION vs INTERVAL", padL + 110, padT - 10);
+
+      // theoretical forgetting curve (median EF)
+      const medEF = 2.5;
+      ctx.strokeStyle = "rgba(51,255,153,0.6)";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      for (let i = 0; i < rb.trail.length; i++) {
-        const p = rb.trail[i];
-        if (i === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
+      for (let i = 0; i <= 60; i++) {
+        const ivl = LMIN * Math.pow(LMAX / LMIN, i / 60);
+        const x = lx(ivl), y = ly(retention(ivl, medEF));
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
-      const rx = rb.x * S.w, ry = rb.y * S.h;
-      ctx.fillStyle = "#33ff99";
-      ctx.beginPath(); ctx.arc(rx, ry, 3.5, 0, Math.PI * 2); ctx.fill();
-      // heading line
-      ctx.strokeStyle = "#e8f1fa";
-      ctx.beginPath();
-      ctx.moveTo(rx, ry);
-      ctx.lineTo(rx + Math.cos(rb.ang) * 12, ry + Math.sin(rb.ang) * 12);
-      ctx.stroke();
 
-      // sensor sweep
-      ctx.strokeStyle = "rgba(53,200,232,0.25)";
-      ctx.beginPath();
-      ctx.moveTo(rx, ry);
-      ctx.lineTo(rx + Math.cos(t * 1.2) * S.w * 0.9, ry + Math.sin(t * 1.2) * S.h * 0.9);
-      ctx.stroke();
+      // word-distribution bubbles: one per interval bucket, size = count
+      const cards = Lexicon.cards();
+      const buckets = new Map();
+      for (const k in cards) {
+        const c = cards[k];
+        const ivl = c.ivl > 0 ? c.ivl : 0.5;
+        const b = ivl >= 21 ? 21 : ivl >= 6 ? 6 : ivl >= 3 ? 3 : ivl >= 1 ? 1 : 0.5;
+        if (!buckets.has(b)) buckets.set(b, { n: 0, efSum: 0 });
+        const bk = buckets.get(b);
+        bk.n++; bk.efSum += c.ef || 2.5;
+      }
+      for (const [b, bk] of buckets) {
+        const ef = bk.efSum / bk.n;
+        const x = lx(b), y = ly(retention(b, ef));
+        const r = 2 + Math.min(5, Math.sqrt(bk.n) * 1.6);
+        const stage = b < 3 ? "#ffb733" : b <= 21 ? "#35c8e8" : "#33ff99";
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = stage;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "rgba(232,241,250,0.4)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = "#5f7187";
+        ctx.font = "8px monospace";
+        ctx.fillText(String(bk.n), x + r + 2, y + 3);
+      }
 
-      // HUD overlay text
+      // today marker at ivl = 1 day
+      ctx.strokeStyle = "#ffb733";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(lx(1), padT); ctx.lineTo(lx(1), padT + plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#ffb733";
+      ctx.font = "bold 9px monospace";
+      ctx.fillText("TODAY", lx(1) + 3, padT + 10);
+
+      // roaming probe along the curve (HUD flavour)
+      const t = Date.now() / 4000;
+      const pv = LMIN * Math.pow(LMAX / LMIN, (0.5 + 0.5 * Math.sin(t)) * 0.9);
+      const px = lx(pv), py = ly(retention(pv, medEF));
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(53,200,232,0.5)";
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + 8, py - 8); ctx.stroke();
+
+      // stage legend (top-right)
+      const leg = [["#ffb733", "LEARNING"], ["#35c8e8", "CONSOLIDATING"], ["#33ff99", "MASTERED"]];
+      let lxr = w - padR;
+      ctx.font = "8px monospace";
+      for (let i = leg.length - 1; i >= 0; i--) {
+        const [c, label] = leg[i];
+        lxr -= label.length * 6 + 13;
+        ctx.fillStyle = c;
+        ctx.fillRect(lxr, padT - 16, 6, 6);
+        ctx.fillStyle = "#5f7187";
+        ctx.fillText(label, lxr + 8, padT - 11);
+      }
+
+      // HUD footer
+      let stageC = { learning: 0, consolidating: 0, mastered: 0 };
+      for (const k in cards) {
+        const s = SRS.stage(cards[k]);
+        if (s !== "new") stageC[s]++;
+      }
+      const learned = Object.keys(cards).length;
       ctx.fillStyle = "#5f7187";
       ctx.font = "10px monospace";
-      ctx.fillText("MAP::SEMI-GLOBAL · CELLS " + exploredCount + "/" + COLS * ROWS, 8, 14);
-      ctx.fillText("POSE x=" + rb.x.toFixed(3) + " y=" + rb.y.toFixed(3) + " θ=" + rb.ang.toFixed(2), 8, S.h - 8);
+      ctx.fillText("CURVE :: " + learned + " WORDS · L " + stageC.learning +
+        " · C " + stageC.consolidating + " · M " + stageC.mastered, padL, h - 4);
     },
 
-    /* ---------------- 14-day telemetry chart ---------------- */
+    /* ---------------- 14-day telemetry chart ----------------
+     * Upper half: 14-day history (new + review stacked bars).
+     * Lower half: FORECAST 14D — review load ahead, bucketed by
+     * due timestamps, with a dashed baseline = daily new-word goal
+     * arriving due the next day. */
     drawChart(canvas) {
       const ctx = this._chartCtx = canvas.getContext("2d");
       const S = this._setupCanvas(ctx, canvas);
@@ -154,26 +200,35 @@
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg-panel2").trim() || "#111a26";
       ctx.fillRect(0, 0, w, h);
 
+      const DAY = 24 * 60 * 60 * 1000;
+      const now = Date.now();
       const st = Lexicon.state().stats;
       const history = st.history || {};
+      const goal = Lexicon.state().settings && Lexicon.state().settings.goalAuto
+        ? (global.App && App.effectiveGoal ? App.effectiveGoal() : (Lexicon.state().settings.goal || 25))
+        : (Lexicon.state().settings.goal || 25);
+
+      /* ---------- upper: 14-day history ---------- */
+      const padL = 28, padT = 30;
+      const midY = padT + (h - padT - 20) * 0.52;
+      const histPlotH = midY - padT - 8;
+      const plotW = w - padL - 8;
+      const bw = plotW / 14;
+
       const days = [];
       for (let i = 13; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 86400000);
+        const d = new Date(now - i * DAY);
         const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
         const h = history[key] || {};
         days.push({ key, n: h.n || 0, r: h.r || 0 });
       }
       const maxN = Math.max(1, ...days.map((d) => d.n + d.r));
-      // top padding reserves room for the legend so bars never overlap it
-      const padL = 28, padB = 18, padT = 30;
-      const plotW = w - padL - 8, plotH = h - padB - padT;
-      const bw = plotW / 14;
 
       // grid
       ctx.strokeStyle = "#1c2a3a";
       ctx.lineWidth = 1;
       for (let g = 0; g <= 4; g++) {
-        const gy = padT + plotH - (plotH * g) / 4;
+        const gy = padT + histPlotH - (histPlotH * g) / 4;
         ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(w - 4, gy); ctx.stroke();
         ctx.fillStyle = "#5f7187";
         ctx.font = "9px monospace";
@@ -187,33 +242,114 @@
       ctx.fillRect(4, 19, 6, 6);
       ctx.fillStyle = "#5f7187";
       ctx.font = "8px monospace";
-      ctx.fillText("WAYPOINT TELEMETRY", 13, 14);
+      ctx.fillText("HIST 14D", 13, 14);
       ctx.fillText("NEW / REVIEW", 13, 25);
 
       // stacked bars: new words below, reviews stacked on top
       for (let i = 0; i < 14; i++) {
         const d = days[i];
         const isToday = i === 13;
-        const bn = (d.n / maxN) * plotH;
-        const br = (d.r / maxN) * plotH;
+        const bn = (d.n / maxN) * histPlotH;
+        const br = (d.r / maxN) * histPlotH;
         const bx = padL + i * bw + bw * 0.22;
         ctx.fillStyle = d.n + d.r > 0 ? (isToday ? "#33ff99" : "#1d8f5c") : "#1a2533";
-        ctx.fillRect(bx, padT + plotH - bn, bw * 0.56, bn);
+        ctx.fillRect(bx, padT + histPlotH - bn, bw * 0.56, bn);
         if (br > 0) {
           ctx.fillStyle = isToday ? "#ffd166" : "#ffb733";
-          ctx.fillRect(bx, padT + plotH - bn - br, bw * 0.56, br);
+          ctx.fillRect(bx, padT + histPlotH - bn - br, bw * 0.56, br);
         }
         ctx.fillStyle = "#5f7187";
         ctx.font = "8px monospace";
-        if (i % 2 === 0) ctx.fillText(d.key.slice(5), bx, h - 6);
+        if (i % 2 === 0) ctx.fillText(d.key.slice(5), bx, midY - 2);
       }
 
       // current-day marker
       ctx.strokeStyle = "#ffb733";
       ctx.beginPath();
       ctx.moveTo(padL + 13 * bw, padT);
-      ctx.lineTo(padL + 13 * bw, padT + plotH);
+      ctx.lineTo(padL + 13 * bw, midY);
       ctx.stroke();
+
+      /* ---------- lower: forecast 14d review load ---------- */
+      const foreTop = midY + 8;
+      const forePlotH = h - foreTop - 22;
+
+      // bucket future due cards by day
+      const cards = Lexicon.cards();
+      const f = new Array(14).fill(0);
+      const dayStart = (k) => {
+        const d = new Date(now + k * DAY);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      };
+      for (const k in cards) {
+        const c = cards[k];
+        if (!c.due || c.due <= now) continue;
+        for (let i = 0; i < 14; i++) {
+          const s = dayStart(i), e = s + DAY;
+          if (c.due >= s && c.due < e) { f[i]++; break; }
+        }
+      }
+      const maxF = Math.max(1, ...f, Math.round(goal));
+
+      // grid + y labels
+      ctx.strokeStyle = "#1c2a3a";
+      ctx.lineWidth = 1;
+      for (let g = 0; g <= 4; g++) {
+        const gy = foreTop + forePlotH - (forePlotH * g) / 4;
+        ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(w - 4, gy); ctx.stroke();
+        ctx.fillStyle = "#5f7187";
+        ctx.font = "8px monospace";
+        ctx.fillText(Math.round((maxF * g) / 4), 4, gy + 3);
+      }
+
+      // dashed baseline: daily new-word goal arriving due the next day
+      ctx.strokeStyle = "rgba(255,183,51,0.55)";
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath();
+      const by = foreTop + forePlotH - (goal / maxF) * forePlotH;
+      ctx.moveTo(padL, by); ctx.lineTo(w - 4, by); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(255,183,51,0.8)";
+      ctx.font = "8px monospace";
+      ctx.fillText("GOAL " + goal + "/D", w - 4 - 62, by - 3);
+
+      // area + line
+      ctx.beginPath();
+      for (let i = 0; i < 14; i++) {
+        const x = padL + i * bw + bw * 0.5;
+        const y = foreTop + forePlotH - (f[i] / maxF) * forePlotH;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = "rgba(53,200,232,0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // fill under the line
+      ctx.lineTo(padL + 13 * bw + bw * 0.5, foreTop + forePlotH);
+      ctx.lineTo(padL + bw * 0.5, foreTop + forePlotH);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(53,200,232,0.12)";
+      ctx.fill();
+
+      // points + x labels (future dates)
+      ctx.fillStyle = "#5f7187";
+      ctx.font = "8px monospace";
+      for (let i = 0; i < 14; i++) {
+        const x = padL + i * bw + bw * 0.5;
+        const y = foreTop + forePlotH - (f[i] / maxF) * forePlotH;
+        ctx.fillStyle = f[i] > 0 ? "#35c8e8" : "#2a3b52";
+        ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+        if (i % 2 === 0) {
+          const d = new Date(now + i * DAY);
+          const mk = String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+          ctx.fillStyle = "#5f7187";
+          ctx.fillText(mk, x - 10, h - 7);
+        }
+      }
+
+      ctx.fillStyle = "rgba(53,200,232,0.85)";
+      ctx.font = "bold 9px monospace";
+      ctx.fillText("FORECAST 14D :: REVIEW LOAD", padL, foreTop + 8);
     }
   };
 
