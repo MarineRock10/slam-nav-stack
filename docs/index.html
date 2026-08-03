@@ -40,12 +40,18 @@
     <!-- ==================== VIEW 1: STATISTICS ==================== -->
     <section id="view-stats" class="view active">
       <div class="grid-2col">
-        <div class="panel curve-panel">
-          <div class="panel-title"><span class="pt-dot"></span>MEMORY CURVE <span class="pt-tag" id="stCurveTag">LIVE</span></div>
-          <canvas id="mapCanvas" class="map-canvas"></canvas>
+        <div class="col-stack col-left">
+          <div class="panel curve-panel">
+            <div class="panel-title"><span class="pt-dot"></span>MEMORY CURVE <span class="pt-tag" id="stCurveTag">LIVE</span></div>
+            <canvas id="mapCanvas" class="map-canvas"></canvas>
+          </div>
+          <div class="panel">
+            <div class="panel-title"><span class="pt-dot"></span>DAILY TELEMETRY <span class="pt-tag">HIST / FORECAST</span></div>
+            <canvas id="chartCanvas" class="chart-canvas"></canvas>
+          </div>
         </div>
 
-        <div class="col-stack">
+        <div class="col-stack col-right">
           <div class="panel">
             <div class="panel-title"><span class="pt-dot"></span>MISSION STATUS
               <span class="view-toggle" id="stToggle">
@@ -105,17 +111,11 @@
             <div class="panel-title"><span class="pt-dot"></span>DAILY FLOW <span class="pt-tag" id="stFlowTag">TODAY</span></div>
             <div class="flow-steps" id="stFlow"></div>
           </div>
-        </div>
-      </div>
 
-      <div class="grid-2col">
-        <div class="panel">
-          <div class="panel-title"><span class="pt-dot"></span>DAILY TELEMETRY <span class="pt-tag">HIST / FORECAST</span></div>
-          <canvas id="chartCanvas" class="chart-canvas"></canvas>
-        </div>
-        <div class="panel">
-          <div class="panel-title"><span class="pt-dot"></span>MEMORY DECK DISTRIBUTION <span class="pt-tag" id="stDeckTag">0 WORDS</span></div>
-          <div class="stage-bars" id="stStageBars"></div>
+          <div class="panel deck-panel">
+            <div class="panel-title"><span class="pt-dot"></span>MEMORY DECK DISTRIBUTION <span class="pt-tag" id="stDeckTag">0 WORDS</span></div>
+            <div class="stage-bars" id="stStageBars"></div>
+          </div>
         </div>
       </div>
 

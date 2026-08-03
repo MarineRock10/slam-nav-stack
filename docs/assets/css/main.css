@@ -207,9 +207,13 @@ html, body {
   display: grid;
   grid-template-columns: 1.25fr 1fr;
   gap: var(--panel-gap);
-  align-items: start;
 }
 .col-stack { display: flex; flex-direction: column; }
+/* each column absorbs slack so both columns always end at the same
+ * height: the left column stretches the curve panel (canvas flex-fills),
+ * the right column stretches the deck panel */
+.col-left > .curve-panel { flex: 1; }
+.col-right > .deck-panel { flex: 1; }
 
 /* ---------------- map ---------------- */
 /* curve panel stretches to the row height (right column is taller),
@@ -1092,6 +1096,10 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 
 @media (max-width: 860px) {
   .grid-2col, .wr-layout, .ph-bank { grid-template-columns: 1fr; }
+  /* single-column: mission/action panels come first, charts after */
+  .grid-2col > .col-right { order: 1; }
+  .grid-2col > .col-left { order: 2; }
+  .col-left > .curve-panel, .col-right > .deck-panel { flex: none; }
   .sb-right .sb-item:nth-child(2), .sb-right .sb-item:nth-child(3) { display: none; }
   .card-word { font-size: var(--fs-3xl); }
   .log-row { grid-template-columns: 130px 1fr; }
