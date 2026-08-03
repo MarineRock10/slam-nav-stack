@@ -322,7 +322,7 @@ html, body {
 /* ---------------- daily flow steps ---------------- */
 .flow-steps {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: var(--sp-2);
 }
 .flow-step {
@@ -345,9 +345,9 @@ html, body {
   padding: 1px var(--sp-1);
 }
 .flow-body { display: flex; flex-direction: column; min-width: 0; }
-.flow-name { color: var(--fg-bright); font-weight: 700; font-size: var(--fs-base); letter-spacing: 0.06em; white-space: nowrap; }
-.flow-state { color: var(--fg-dim); font-size: var(--fs-tiny); letter-spacing: 0.04em; margin-top: 1px; }
-.flow-arrow { margin-left: auto; color: var(--accent); }
+.flow-name { color: var(--fg-bright); font-weight: 700; font-size: var(--fs-sm); letter-spacing: 0.06em; white-space: nowrap; }
+.flow-state { color: var(--fg-dim); font-size: var(--fs-tiny); letter-spacing: 0.04em; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-arrow { margin-left: auto; color: var(--accent); flex: none; }
 .flow-rev .flow-name { color: var(--amber); }
 .flow-hot .flow-name { color: var(--red); }
 .flow-new .flow-name { color: var(--cyan); }

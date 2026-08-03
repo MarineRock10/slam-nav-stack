@@ -49,7 +49,7 @@
       if (!S) return;
       const { w, h } = S;
 
-      const padL = 34, padR = 12, padT = 26, padB = 22;
+      const padL = 34, padR = 12, padT = 30, padB = 22;
       const plotW = w - padL - padR, plotH = h - padT - padB;
       const LMIN = 0.5, LMAX = 64;
       const lx = (ivl) => padL + ((Math.log2(Math.max(LMIN, ivl)) - Math.log2(LMIN)) /
@@ -60,6 +60,12 @@
       // bg
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg-panel2").trim() || "#111a26";
       ctx.fillRect(0, 0, w, h);
+
+      // title (top-left) — axis meaning is stated here, no separate
+      // axis labels to avoid overlap
+      ctx.fillStyle = "rgba(53,200,232,0.85)";
+      ctx.font = "bold 10px monospace";
+      ctx.fillText("MEMORY CURVE :: RETENTION vs INTERVAL", padL, 14);
 
       // stage bands: LEARNING <3d / CONSOLIDATING 3-21d / MASTERED >21d
       const bands = [
@@ -85,9 +91,9 @@
         ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(w - padR, gy); ctx.stroke();
         ctx.fillText(g * 25 + "%", 4, gy + 3);
       }
-      ctx.fillText("RETENTION", 4, padT - 10);
+      ctx.fillText("RETENTION", 4, padT - 6);
 
-      // x ticks (log spaced) + axis label
+      // x ticks (log spaced)
       ctx.fillStyle = "#5f7187";
       ctx.font = "9px monospace";
       for (const t of [0.5, 1, 3, 6, 10, 21, 45]) {
@@ -95,12 +101,7 @@
         ctx.strokeStyle = "#1c2a3a";
         ctx.beginPath(); ctx.moveTo(lx(t), padT + plotH); ctx.lineTo(lx(t), padT + plotH + 4); ctx.stroke();
       }
-      ctx.fillText("INTERVAL (DAYS)", padL, padT - 10);
-
-      // title
-      ctx.fillStyle = "rgba(53,200,232,0.85)";
-      ctx.font = "bold 10px monospace";
-      ctx.fillText("MEMORY CURVE :: RETENTION vs INTERVAL", padL + 110, padT - 10);
+      ctx.fillText("INTERVAL (DAYS)", padL, h - 7);
 
       // theoretical forgetting curve (median EF)
       const medEF = 2.5;
