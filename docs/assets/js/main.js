@@ -63,6 +63,11 @@
       Telemetry.initMap($("mapCanvas"));
       Telemetry.drawChart($("chartCanvas"));
       this.cloudInit();
+      // partial session accounting: words graded so far count toward
+      // today's history even if the page is hidden/closed mid-session
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") this.partialLog();
+      });
     },
 
     /* ================= cloud sync ================= */
@@ -337,6 +342,7 @@
       this.session = {
         queue, groups, gi: 0, wi: 0, phase: "meaning",
         scores: {}, newDone: 0, revDone: 0, failed: 0,
+        _logged: { n: 0, r: 0 },   // stats already banked via partialLog()
         startedAt: new Date().toISOString()
       };
       this.vsub = "train";
@@ -905,9 +911,23 @@
       else s.revDone++;
     },
 
+    /* partial session accounting: bank the words graded so far into
+     * today's history (new/review counts + streak) without requiring
+     * the whole session to finish. endSession() logs only the delta. */
+    partialLog() {
+      const s = this.session;
+      if (!s) return;
+      const n = s.newDone - s._logged.n;
+      const r = s.revDone - s._logged.r;
+      if (n <= 0 && r <= 0) return;
+      Lexicon.logStudy(n, r);
+      s._logged.n = s.newDone;
+      s._logged.r = s.revDone;
+    },
+
     endSession() {
       const s = this.session;
-      Lexicon.logStudy(s.newDone, s.revDone);
+      Lexicon.logStudy(s.newDone - s._logged.n, s.revDone - s._logged.r);
       WordAnnotate.refresh();
       $("mcProgress").style.width = "100%";
       $("mcMode").textContent = "MISSION COMPLETE";
