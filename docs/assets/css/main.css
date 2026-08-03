@@ -212,6 +212,11 @@ html, body {
 .col-stack { display: flex; flex-direction: column; }
 
 /* ---------------- map ---------------- */
+/* curve panel stretches to the row height (right column is taller),
+ * so the canvas fills the space instead of leaving a gap above the
+ * next row of panels */
+.curve-panel { display: flex; flex-direction: column; }
+.curve-panel .map-canvas { flex: 1; height: auto; min-height: 300px; }
 .map-canvas {
   width: 100%;
   height: 300px;
