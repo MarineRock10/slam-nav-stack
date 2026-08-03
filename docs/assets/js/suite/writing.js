@@ -97,7 +97,7 @@
       }
       html += "</div>";
       html +=
-        '<div class="panel suite-result" style="margin-top:12px">' +
+        '<div class="panel suite-result">' +
         '<div class="panel-title"><span class="pt-dot"></span>BAND PHRASE BANK <span class="pt-tag">REFERENCE</span></div>' +
         '<div class="ph-bank">' + this.renderPhrases() + "</div></div>";
       container.innerHTML = html;
@@ -142,13 +142,13 @@
         '<div class="panel"><div class="panel-title"><span class="pt-dot"></span>MISSION BRIEF</div>' +
         '<div class="wr-prompt" id="wrPrompt">' + (global.WordAnnotate ? WordAnnotate.annotate(t.prompt) : this.esc(t.prompt)) + "</div>" +
         '<div class="wr-meta">MIN WORDS ' + (t.min || "-") + (t.max ? " · MAX " + t.max : "") + "</div>" +
-        '<div class="panel-title" style="margin-top:14px"><span class="pt-dot"></span>PHRASE BANK</div>' +
+        '<div class="panel-title"><span class="pt-dot"></span>PHRASE BANK</div>' +
         '<div class="ph-bank ph-inline">' + this.renderPhrasesFor(t.type) + "</div></div>" +
         '<div class="panel"><div class="panel-title"><span class="pt-dot"></span>REPORT DRAFT</div>' +
         '<textarea id="wrText" class="wr-textarea" placeholder="WRITE YOUR REPORT HERE...">' + this.esc(saved || "") + "</textarea>" +
         '<div class="wr-count" id="wrCount">0 WORDS</div>' +
         '<button class="btn" id="wrSave">⇩ SAVE DRAFT (LOCAL)</button>' +
-        '<div class="panel-title" style="margin-top:14px"><span class="pt-dot"></span>SELF-ASSESSMENT</div>' +
+        '<div class="panel-title"><span class="pt-dot"></span>SELF-ASSESSMENT</div>' +
         '<div class="chk-list">' +
         CHECKLIST.map((c2, i) =>
           '<label class="chk"><input type="checkbox" data-chk="' + i + '"> <span>' + c2.label + "</span></label>"

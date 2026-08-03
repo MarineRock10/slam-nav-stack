@@ -867,7 +867,7 @@
         '<span class="card-status ' + (groupPct >= 70 ? "mature" : groupPct >= 50 ? "learn" : "new") + '">' +
         (groupPct >= 90 ? "EXCELLENT" : groupPct >= 70 ? "GOOD" : groupPct >= 50 ? "REVIEW NEEDED" : "WEAK") + "</span>" +
         '<div class="sense-label">GROUP SUCCESS RATE — WORDS PLACED ON THE MEMORY CURVE</div>' +
-        (group.scene ? '<div class="scene-sentence" style="font-size:13px">“' +
+        (group.scene ? '<div class="scene-sentence gr-scene">“' +
           this.highlightWords(group.scene, group.words.map((w) => w.ent.w)) + '”</div>' : "") +
         '<div class="gr-list">' + rows + "</div>" +
         '<div class="step-bar nav-bar">' +
