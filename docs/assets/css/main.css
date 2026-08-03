@@ -217,11 +217,18 @@ html, body {
 .statbar-label {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   color: var(--fg-dim);
   font-size: 10px;
   letter-spacing: 0.1em;
   margin-bottom: 4px;
 }
+.statbar-label a {
+  color: var(--amber);
+  text-decoration: none;
+  letter-spacing: 0.08em;
+}
+.statbar-label a:hover { text-decoration: underline; }
 .statbar {
   height: 8px;
   background: var(--bg-panel2);

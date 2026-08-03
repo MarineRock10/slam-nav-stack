@@ -44,17 +44,9 @@
   ).split(/\s+/));
 
   const WordAnnotate = {
-    /* simple stemmer: strip common suffixes to match base forms */
+    /* stemmer: reuse the lexicon service's suffix stripping (single source) */
     stem(w) {
-      let s = w;
-      if (s.length <= 4) return s;
-      if (s.endsWith("ies")) return s.slice(0, -3) + "y";
-      if (s.endsWith("es")) return s.slice(0, -2);
-      if (s.endsWith("ed")) return s.slice(0, -2);
-      if (s.endsWith("ing")) return s.slice(0, -3);
-      if (s.endsWith("s") && !s.endsWith("ss")) return s.slice(0, -1);
-      if (s.endsWith("ly")) return s.slice(0, -2);
-      return s;
+      return global.Lexicon ? Lexicon.stem(w) : String(w);
     },
 
     _cards: null,

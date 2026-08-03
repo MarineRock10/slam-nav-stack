@@ -32,11 +32,11 @@
       const c = { ...card };
       c.seen = Date.now();
 
-      if (q === 0) { // AGAIN: reset progress, redue immediately
+      if (q === 0) { // AGAIN: reset progress, redue shortly
         c.reps = 0;
         c.ivl = 1;
         c.ef = Math.max(1.3, c.ef - 0.2);
-        c.due = Date.now() + 10 * 60 * 1000; // re-show within the session
+        c.due = Date.now() + 10 * 60 * 1000; // enters the review queue shortly after (not re-shown live)
         c.lvl = 1; // still inside the learning loop, never back to "new"
         c.weak = (c.weak || 0) + 1;         // weakness streak -> auto-flag
         return c;

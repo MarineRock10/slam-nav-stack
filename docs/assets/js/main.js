@@ -184,7 +184,9 @@
         const c = cards[k];
         if (c.added && now - c.added < DAY) newToday++;
       }
-      const goal = st.settings.goal;
+      // daily target follows the DDL when goalAuto is on — one value
+      // everywhere so TODAY and ALL TIME views never drift
+      const effGoal = this.effectiveGoal(st);
       // ---- DDL pace: recommended daily goal + ahead/behind estimate ----
       const m = this.ddlMetrics();
       const remaining = m.remaining, suggestGoal = m.suggestGoal;
@@ -196,13 +198,17 @@
       }
       const totalDays = firstDay ? Math.max(1, Math.ceil((exam - firstDay) / DAY)) : Math.max(1, daysLeft);
       const elapsedDays = firstDay ? Math.max(0, totalDays - daysLeft) : 0;
-      const expected = elapsedDays * goal;
+      const expected = elapsedDays * effGoal;
       const diff = learned - expected;
-      const paceDays = goal ? diff / goal : 0;
+      const paceDays = effGoal ? diff / effGoal : 0;
       $("stPace").textContent = paceDays >= 0
         ? "AHEAD +" + paceDays.toFixed(1) + "D"
         : "BEHIND " + Math.abs(paceDays).toFixed(1) + "D";
-      $("stPaceSub").textContent = "SUGGESTED " + suggestGoal + "/DAY · " + remaining + " CORE LEFT";
+      // forecast: completion date if the suggested pace is kept; red when behind
+      const eta = new Date(Date.now() + Math.ceil(remaining / Math.max(1, suggestGoal)) * DAY);
+      const etaStr = eta.getFullYear() + "-" + String(eta.getMonth() + 1).padStart(2, "0") + "-" + String(eta.getDate()).padStart(2, "0");
+      $("stPace").style.color = paceDays < 0 ? "var(--red)" : "";
+      $("stPaceSub").textContent = "SUGGESTED " + suggestGoal + "/DAY · " + remaining + " CORE LEFT · ETA " + etaStr;
       const todayKey = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, "0") + "-" + String(new Date().getDate()).padStart(2, "0");
       const hist = (st.stats.history || {})[todayKey] || { n: 0, r: 0, p: 0 };
       const todayTotal = (hist.n || 0) + (hist.r || 0) + (hist.p || 0);
@@ -210,9 +216,8 @@
       if (this.stView === "today") {
         // ---- TODAY view: composite progress across all factors ----
         // new words 60% · reviews 25% · practice 15%
-        const effGoal = this.effectiveGoal(st);
         const newScore = Math.min(newToday / effGoal, 1) * 60;
-        const revScore = Math.min((hist.r || 0) / Math.max(1, Math.round(goal * 0.5)), 1) * 25;
+        const revScore = Math.min((hist.r || 0) / Math.max(1, Math.round(effGoal * 0.5)), 1) * 25;
         const pracScore = Math.min((hist.p || 0) / 2, 1) * 15;
         const totalPct = Math.round(newScore + revScore + pracScore);
         $("stLblExam").textContent = "MISSION ETA";
@@ -221,13 +226,13 @@
         $("stLblStreak").textContent = "TOTAL ACTIVITY";
         $("stLblCover").textContent = "DAILY GOAL (NEW WORDS)";
         $("stToday").textContent = totalPct + "%";
-        $("stTodayPct").textContent = "NEW " + newToday + "/" + goal + " · REV " + (hist.r || 0) + " · PRAC " + (hist.p || 0);
-        $("stDue").textContent = hist.r || 0;
-        $("stDueSub").textContent = "REVIEWS DONE";
+        $("stTodayPct").textContent = "NEW " + newToday + "/" + effGoal + " · REV " + (hist.r || 0) + " · PRAC " + (hist.p || 0);
+        $("stDue").textContent = (hist.r || 0) + " / " + counts.due;
+        $("stDueSub").textContent = "REVIEWS DONE / QUEUED";
         $("stStreak").textContent = todayTotal;
         $("stStreakSub").textContent = "TOTAL ACTIVITIES";
-        const goalPct = Math.min(100, Math.round((newToday / goal) * 100));
-        $("stCoverage").textContent = newToday >= goal ? "GOAL MET ✓" : goalPct + "%";
+        const goalPct = Math.min(100, Math.round((newToday / effGoal) * 100));
+        $("stCoverage").textContent = newToday >= effGoal ? "GOAL MET ✓" : goalPct + "%";
         $("stCoverageFill").style.width = totalPct + "%";
       } else {
         // ---- ALL TIME view ----
@@ -236,7 +241,6 @@
         $("stLblDue").textContent = "REVIEWS DUE";
         $("stLblStreak").textContent = "STREAK";
         $("stLblCover").textContent = "VOCAB COVERAGE";
-        const effGoal = this.effectiveGoal(st);
         $("stToday").textContent = newToday + "/" + effGoal;
         $("stTodayPct").textContent = Math.min(100, Math.round((newToday / effGoal) * 100)) + "%";
         $("stDue").textContent = counts.due;
@@ -252,6 +256,24 @@
       const tab = document.querySelector('.tab[data-view="vocab"]');
       const hot = Object.keys(Lexicon.unfamiliarList()).length;
       tab.textContent = hot > 0 ? "VOCABULARY (" + hot + ")" : "VOCABULARY";
+
+      // hot-zone quick row on the stats panel -> deck filtered to flagged words
+      const hotWrap = $("stHotWrap");
+      if (hotWrap) {
+        hotWrap.hidden = hot === 0;
+        $("stHotCount").textContent = hot;
+        $("stHotGo").onclick = (e) => {
+          e.preventDefault();
+          this._deckFilter = "hot";
+          this._deckPage = 0;
+          this.vsub = "deck";
+          this.switchView("vocab");
+          document.querySelectorAll("#vocabSubNav .tab").forEach((b) =>
+            b.classList.toggle("active", b.dataset.sub === "deck"));
+          document.querySelectorAll("#dkFilter .deck-f").forEach((x) =>
+            x.classList.toggle("active", x.dataset.f === "hot"));
+        };
+      }
     },
 
     renderStages() {
@@ -516,6 +538,7 @@
         s.wi = s.groups[s.gi].words.length - 1;
         s.phase = "result";
         this.renderPhase();
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
     goNext() {
@@ -530,6 +553,7 @@
         if (s.gi >= s.groups.length) { this.endSession(); return; }
         s.phase = "meaning";
         this.renderPhase();
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
     navBar(backId, nextId, nextLabel, backDisabled) {

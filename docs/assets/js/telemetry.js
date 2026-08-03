@@ -160,9 +160,10 @@
       for (let i = 13; i >= 0; i--) {
         const d = new Date(Date.now() - i * 86400000);
         const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-        days.push({ key, n: (history[key] || {}).n || 0 });
+        const h = history[key] || {};
+        days.push({ key, n: h.n || 0, r: h.r || 0 });
       }
-      const maxN = Math.max(1, ...days.map((d) => d.n));
+      const maxN = Math.max(1, ...days.map((d) => d.n + d.r));
       const padL = 28, padB = 18, padT = 8;
       const plotW = w - padL - 8, plotH = h - padB - padT;
       const bw = plotW / 14;
@@ -178,13 +179,29 @@
         ctx.fillText(Math.round((maxN * g) / 4), 4, gy + 3);
       }
 
-      // bars
+      // legend (new vs review), telemetry-flavoured
+      ctx.fillStyle = "#1d8f5c";
+      ctx.fillRect(4, padT, 6, 6);
+      ctx.fillStyle = "#ffb733";
+      ctx.fillRect(40, padT, 6, 6);
+      ctx.fillStyle = "#5f7187";
+      ctx.font = "8px monospace";
+      ctx.fillText("WAYPOINT TELEMETRY · NEW", 13, padT + 6);
+      ctx.fillText("REVIEW", 49, padT + 6);
+
+      // stacked bars: new words below, reviews stacked on top
       for (let i = 0; i < 14; i++) {
         const d = days[i];
-        const bh = (d.n / maxN) * plotH;
+        const isToday = i === 13;
+        const bn = (d.n / maxN) * plotH;
+        const br = (d.r / maxN) * plotH;
         const bx = padL + i * bw + bw * 0.22;
-        ctx.fillStyle = d.n > 0 ? (i === 13 ? "#33ff99" : "#1d8f5c") : "#1a2533";
-        ctx.fillRect(bx, padT + plotH - bh, bw * 0.56, bh);
+        ctx.fillStyle = d.n + d.r > 0 ? (isToday ? "#33ff99" : "#1d8f5c") : "#1a2533";
+        ctx.fillRect(bx, padT + plotH - bn, bw * 0.56, bn);
+        if (br > 0) {
+          ctx.fillStyle = isToday ? "#ffd166" : "#ffb733";
+          ctx.fillRect(bx, padT + plotH - bn - br, bw * 0.56, br);
+        }
         ctx.fillStyle = "#5f7187";
         ctx.font = "8px monospace";
         if (i % 2 === 0) ctx.fillText(d.key.slice(5), bx, h - 6);
