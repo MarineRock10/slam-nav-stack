@@ -88,6 +88,16 @@
         ent.e = core[k].e || "";
         if (ent.p > 0) ent.p = 0;
       }
+      // offline-completed Chinese glosses + IPA for core-vocab words
+      // that ielts-data.js never shipped (识别选项从此不再空白)
+      const cz = global.CORE_ZH || {};
+      for (const k in cz) {
+        const ent = this.get(k);
+        if (!ent) continue;
+        if (!ent.t && cz[k].t) ent.t = cz[k].t;
+        if (!ent.us && cz[k].us) ent.us = cz[k].us;
+        if (!ent.uk && cz[k].uk) ent.uk = cz[k].uk;
+      }
       // English sense definitions (4000 EEW / WordNet) fill gaps:
       // curated core-vocab definitions above always win.
       const defs = global.IELTS_DEFS || {};
