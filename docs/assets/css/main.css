@@ -963,6 +963,75 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 .stage-label { color: var(--fg-dim); font-size: var(--fs-tiny); letter-spacing: 0.1em; }
 .stage-count { color: var(--fg-bright); font-size: var(--fs-sm); text-align: right; }
 
+/* ---- cognitive theme arc (认知弧线) ---- */
+.theme-arc { display: flex; flex-direction: column; gap: var(--sp-2); }
+.arc-head {
+  display: flex; justify-content: space-between; gap: var(--sp-3);
+  font-size: var(--fs-tiny); letter-spacing: 0.08em; color: var(--fg-dim);
+  padding-bottom: var(--sp-1); border-bottom: 1px dashed var(--border);
+}
+.arc-cur { color: var(--cyan); }
+.arc-row {
+  display: grid; grid-template-columns: 26px 92px 1fr 64px;
+  gap: var(--sp-2); align-items: center;
+  font-size: var(--fs-tiny);
+}
+.arc-row .statbar { height: 6px; }
+.arc-no { color: var(--fg-dim); font-family: monospace; }
+.arc-name { color: var(--fg-dim); letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arc-count { color: var(--fg-dim); text-align: right; font-family: monospace; }
+.arc-done .arc-no { color: var(--accent); }
+.arc-done .arc-name { color: var(--fg-bright); }
+.arc-done .arc-count { color: var(--accent); }
+.arc-now .arc-no { color: var(--cyan); }
+.arc-now .arc-name { color: var(--cyan); font-weight: bold; }
+.arc-now .arc-count { color: var(--cyan); }
+.arc-now .statbar-fill { background: var(--cyan); }
+.arc-done .statbar-fill { background: var(--accent); }
+
+/* ---- word meta line: phonetic + root/family ---- */
+.word-meta {
+  display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3);
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-tiny); letter-spacing: 0.04em;
+}
+.word-phone { color: var(--cyan); font-family: monospace; }
+.word-root { color: var(--amber); }
+
+/* ---- recognition (看词选义) ---- */
+.recognize-word {
+  font-size: var(--fs-3xl); font-weight: bold; color: var(--fg-bright);
+  letter-spacing: 0.06em; margin: var(--sp-2) 0 var(--sp-1);
+}
+.recognize-opts { display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-3) 0; }
+.rec-opt {
+  display: flex; align-items: center; gap: var(--sp-3);
+  width: 100%; text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-panel2);
+  border: 1px solid var(--border-bright);
+  color: var(--fg);
+  font-size: var(--fs-lg);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.rec-opt:hover:not(:disabled) { border-color: var(--cyan); background: var(--bg-panel); }
+.rec-opt:disabled { cursor: default; }
+.rec-key {
+  flex: 0 0 22px; height: 22px; line-height: 20px; text-align: center;
+  border: 1px solid var(--border-bright); border-radius: var(--r-sm);
+  font-size: var(--fs-tiny); font-family: monospace; color: var(--fg-dim);
+}
+.rec-correct { border-color: var(--accent); background: rgba(29, 143, 92, 0.18); color: var(--accent); }
+.rec-correct .rec-key { border-color: var(--accent); color: var(--accent); }
+.rec-wrong { border-color: var(--red); background: rgba(255, 77, 77, 0.14); color: var(--red); }
+.rec-wrong .rec-key { border-color: var(--red); color: var(--red); }
+.rec-dim { opacity: 0.45; }
+#recNav { display: none; }
+
+/* result row flag for failed recognition */
+.gr-rec { color: var(--red); font-size: var(--fs-tiny); }
+
 /* all-time / today toggle */
 .view-toggle { margin-left: auto; display: flex; gap: var(--sp-1); }
 .view-t { padding: var(--sp-1) var(--sp-3); font-size: var(--fs-tiny); letter-spacing: 0.08em; }
@@ -1110,6 +1179,8 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   .stage-row { grid-template-columns: 90px 1fr 40px; }
   .mod-stat { grid-template-columns: 120px 1fr 50px; }
   .flow-steps { grid-template-columns: 1fr 1fr; }
+  .arc-row { grid-template-columns: 22px 1fr 56px; }
+  .arc-count { display: none; }
 }
 
 @media (max-width: 560px) {

@@ -15,7 +15,7 @@
   const LS_TOKEN = "sls_cloud_token";
   const LS_ENABLED = "sls_cloud_enabled";
   const LS_LAST = "sls_cloud_last";
-  const PATCH_KEYS = ["sls_cards", "sls_state", "sls_custom", "sls_unfamiliar", "sls_suite", "sls_drafts"];
+  const PATCH_KEYS = ["sls_cards", "sls_state", "sls_custom", "sls_unfamiliar"];
 
   let _applying = false;   // suppress echo pushes while applying a pull
   let _hooked = false;
@@ -67,14 +67,12 @@
     snapshot() {
       return {
         app: "slam-nav-stack",
-        version: 2,
+        version: 3,
         updatedAt: new Date().toISOString(),
         cards: global.Lexicon ? Lexicon.cards() : {},
         state: global.Lexicon ? Lexicon.state() : null,
         unfamiliar: global.Lexicon ? Lexicon.getUnfamiliar() : {},
-        custom: global.Lexicon ? Lexicon.getCustom() : {},
-        suite: global.Suite ? Suite.progress() : null,
-        drafts: (() => { try { return JSON.parse(localStorage.getItem("sls_drafts") || "{}"); } catch (e) { return {}; } })()
+        custom: global.Lexicon ? Lexicon.getCustom() : {}
       };
     },
 
@@ -82,7 +80,7 @@
     _signature(data) {
       return JSON.stringify({
         cards: data.cards, state: data.state, unfamiliar: data.unfamiliar,
-        custom: data.custom, suite: data.suite, drafts: data.drafts
+        custom: data.custom
       });
     },
 
@@ -103,7 +101,7 @@
     },
 
     apply(data) {
-      const L = global.Lexicon, S = global.Suite;
+      const L = global.Lexicon;
       if (!L) return;
       // cards
       L._cards = data.cards || {};
@@ -119,13 +117,6 @@
       // custom lexicon entries
       if (data.custom) { L._custom = data.custom; L.saveCustom(); }
       L.refresh();
-      // practice module progress
-      if (data.suite && S) { S._data = data.suite; S.save(); }
-      // writing drafts
-      if (data.drafts) {
-        try { localStorage.setItem("sls_drafts", JSON.stringify(data.drafts)); } catch (e) {}
-      }
-      if (global.WordAnnotate) WordAnnotate.refresh();
       try { localStorage.setItem(LS_LAST, data.updatedAt || ""); } catch (e) {}
     },
 

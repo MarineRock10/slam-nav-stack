@@ -45,14 +45,6 @@
       Lexicon.load();
       CloudSync.init();
       CloudSync.onStatus = (msg) => this.setCloudStatus(msg);
-      // wire suite module progress reporting
-      global.Listening.onProgress = Suite.record.bind(Suite);
-      global.ListeningFull.onProgress = Suite.record.bind(Suite);
-      global.Reading.onProgress = Suite.record.bind(Suite);
-      global.Writing.onProgress = Suite.record.bind(Suite);
-      // unknown-word panel buttons
-      $("btnUnkAdd").addEventListener("click", () => WordAnnotate.addCurrent());
-      $("btnUnkClose").addEventListener("click", () => WordAnnotate.closePanel());
       this.bindTabs();
       this.bindActions();
       this.bindSettings();
@@ -81,9 +73,6 @@
         if (r.ok) {
           this.renderAll();
           this.renderDeck();
-          if (this.view === "listen") Suite.renderModule("listen", $("listenContainer"));
-          if (this.view === "read") Suite.renderModule("read", $("readContainer"));
-          if (this.view === "write") Suite.renderModule("write", $("writeContainer"));
           this.setCloudStatus("SYNCED — CLOUD COPY LOADED (" + (r.at || "").slice(0, 10) + ")");
         } else if (r.reason === "HTTP 404") {
           this.setCloudStatus("NO CLOUD COPY YET — SAVE CONFIG WITH AUTO SYNC ON TO SEED IT");
@@ -114,9 +103,6 @@
         sec.classList.toggle("active", sec.id === "view-" + v));
       if (v === "stats") { this.renderAll(); Telemetry.drawChart($("chartCanvas")); }
       if (v === "vocab") this.showSub();
-      if (v === "listen") Suite.renderModule("listen", $("listenContainer"));
-      if (v === "read") Suite.renderModule("read", $("readContainer"));
-      if (v === "write") Suite.renderModule("write", $("writeContainer"));
     },
     switchSub(s) {
       this.vsub = s;
@@ -163,7 +149,7 @@
     renderAll() {
       this.renderStats();
       this.renderStages();
-      this.renderModStats();
+      this.renderThemeArc();
       this.renderDailyFlow();
       Telemetry.drawChart($("chartCanvas"));
     },
@@ -221,18 +207,17 @@
 
       if (this.stView === "today") {
         // ---- TODAY view: composite progress across all factors ----
-        // new words 60% · reviews 25% · practice 15%
-        const newScore = Math.min(newToday / effGoal, 1) * 60;
-        const revScore = Math.min((hist.r || 0) / Math.max(1, Math.round(effGoal * 0.5)), 1) * 25;
-        const pracScore = Math.min((hist.p || 0) / 2, 1) * 15;
-        const totalPct = Math.round(newScore + revScore + pracScore);
+        // new words 70% · reviews 30%
+        const newScore = Math.min(newToday / effGoal, 1) * 70;
+        const revScore = Math.min((hist.r || 0) / Math.max(1, Math.round(effGoal * 0.5)), 1) * 30;
+        const totalPct = Math.round(newScore + revScore);
         $("stLblExam").textContent = "MISSION ETA";
         $("stLblToday").textContent = "TODAY PROGRESS";
         $("stLblDue").textContent = "REVIEWS TODAY";
         $("stLblStreak").textContent = "TOTAL ACTIVITY";
         $("stLblCover").textContent = "DAILY GOAL (NEW WORDS)";
         $("stToday").textContent = totalPct + "%";
-        $("stTodayPct").textContent = "NEW " + newToday + "/" + effGoal + " · REV " + (hist.r || 0) + " · PRAC " + (hist.p || 0);
+        $("stTodayPct").textContent = "NEW " + newToday + "/" + effGoal + " · REV " + (hist.r || 0);
         $("stDue").textContent = (hist.r || 0) + " / " + counts.due;
         $("stDueSub").textContent = "REVIEWS DONE / QUEUED";
         $("stStreak").textContent = todayTotal;
@@ -313,6 +298,8 @@
       const todayKey = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, "0") + "-" + String(new Date().getDate()).padStart(2, "0");
       const hist = (st.stats.history || {})[todayKey] || { n: 0, r: 0, p: 0 };
       const qNew = Math.max(0, effGoal - (hist.n || 0));
+      const curTheme = Lexicon.currentTheme();
+      const themeName = curTheme ? curTheme.name.toUpperCase() : "GENERAL";
 
       const step = (id, num, label, state, act) =>
         '<div class="flow-step flow-' + id + '"' + (act ? ' data-act="' + act + '"' : "") + ">" +
@@ -328,11 +315,11 @@
       steps.push(step("hot", "02", "HOT ZONE",
         hot === 0 ? "ALL CLEAR ✓" : hot + " FLAGGED",
         hot > 0 ? "hot" : null));
-      steps.push(step("new", "03", "NEW WORDS",
+      steps.push(step("new", "03", "NEW WORDS · " + themeName,
         qNew === 0 ? "GOAL MET ✓" : (hist.n || 0) + " / " + effGoal + " LEARNED",
         qNew > 0 ? "new" : null));
       steps.push(step("scene", "04", "SCENE SESSION",
-        "LISTEN · SPELL · FILL", null));
+        "MEANING · RECOGNIZE · SPELL · FILL", null));
 
       $("stFlow").innerHTML = steps.join("");
       $("stFlow").querySelectorAll(".flow-step[data-act]").forEach((el) => {
@@ -365,18 +352,27 @@
       }).join("");
     },
 
-    renderModStats() {
-      const p = Suite.progress();
-      const rows = [
-        ["LISTENING · QUICK", Object.keys(p.listening.sets).length, (global.LISTENING_SETS || []).length],
-        ["LISTENING · FULL", Object.keys(p.listeningFull.sets).length, (global.LISTENING_FULL || []).length],
-        ["READING", Object.keys(p.reading.tests).length, (global.READING_TESTS || []).length],
-        ["WRITING", Object.keys(p.writing.tasks).length, (global.WRITING_TASKS || []).length]
-      ];
-      $("stModStats").innerHTML = rows.map((r) =>
-        '<div class="mod-stat"><span>' + r[0] + '</span><div class="statbar"><div class="statbar-fill" style="width:' +
-        (r[2] ? (r[1] / r[2]) * 100 : 0) + '%"></div></div><span>' + r[1] + " / " + r[2] + "</span></div>"
-      ).join("");
+    /* ---- THEME ARC: 22-chapter cognitive arc progress ----
+     * chapters light up in learning order; the current chapter
+     * (first with unstudied words) is highlighted. */
+    renderThemeArc() {
+      const el = $("stThemeArc");
+      if (!el) return;
+      const ts = Lexicon.themeStats();
+      const cur = Lexicon.currentTheme();
+      const bars = ts.arc.map((t) => {
+        const state = t.done ? "done" : (cur && cur.id === t.id ? "now" : "wait");
+        const pct = t.total ? Math.round((t.learned / t.total) * 100) : 0;
+        return '<div class="arc-row arc-' + state + '" data-t="' + t.id + '">' +
+          '<span class="arc-no">' + String(ts.arc.indexOf(t) + 1).padStart(2, "0") + "</span>" +
+          '<span class="arc-name">' + t.name + "</span>" +
+          '<div class="statbar"><div class="statbar-fill" style="width:' + pct + '%"></div></div>' +
+          '<span class="arc-count">' + t.learned + "/" + t.total + "</span></div>";
+      }).join("");
+      const curName = cur ? cur.name : "";
+      el.innerHTML = '<div class="arc-head"><span class="arc-cur">CURRENT: ' + curName + "</span>" +
+        '<span class="arc-gen">GENERAL POOL ' + ts.general.learned + "/" + ts.general.total + "</span></div>" +
+        '<div class="arc-list">' + bars + "</div>";
     },
 
     /* ================= session / daily mix ================= */
@@ -402,9 +398,12 @@
 
     startSession(reviewOnly) {
       const queue = this.buildQueue(reviewOnly);
-      const groups = this.buildGroups(queue);
+      const groups = this.buildGroups(queue, reviewOnly);
       this.session = {
-        queue, groups, gi: 0, wi: 0, phase: "meaning",
+        queue, groups, gi: 0, wi: 0,
+        // review-only queues skip the scene-listening stage — the
+        // first card starts at recognition (identification first)
+        phase: (groups[0] && groups[0].words[0].isNew) ? "meaning" : "recognize",
         scores: {}, newDone: 0, revDone: 0, failed: 0,
         _logged: { n: 0, r: 0 },   // stats already banked via partialLog()
         startedAt: new Date().toISOString()
@@ -513,26 +512,32 @@
           groups.push({ scene: null, words: [t] });
         }
       }
-      // 2) new words — the sentences decide which words today
+      // 2) new words — the sentences decide which words today,
+      //    with a cognitive-arc bias: sentences carrying words of
+      //    the current theme outrank equal-sized alternatives
       if (!reviewOnly) {
         const st = Lexicon.state();
         const freshCount = queue.filter((t) => t.isNew && t.hot).length;
         let budget = Math.max(0, this.effectiveGoal(st) - freshCount);
         const cards = Lexicon.cards();
+        const curTheme = Lexicon.currentTheme();
+        const curId = curTheme ? curTheme.id : null;
         while (budget > 0) {
-          let best = null, bestScore = 0, bestCore = 0;
+          let best = null, bestScore = 0, bestCore = 0, bestTheme = -1;
           for (const b of bank) {
             if (b.words.length < 2) continue;
-            let score = 0, core = 0;
+            let score = 0, core = 0, theme = 0;
             for (const w of b.words) {
               if (used.has(w) || cards[w]) continue;
               const ent = Lexicon.get(w);
               if (!ent) continue;
               score++;
               if (ent.p === 0) core++;
+              if (curId && Lexicon.themeOf(w) === curId) theme++;
             }
-            if (score > bestScore || (score === bestScore && core > bestCore)) {
-              best = b; bestScore = score; bestCore = core;
+            if (theme > bestTheme || (theme === bestTheme &&
+              (score > bestScore || (score === bestScore && core > bestCore)))) {
+              best = b; bestScore = score; bestCore = core; bestTheme = theme;
             }
           }
           if (!best || bestScore < 2) break;
@@ -549,7 +554,20 @@
           groups.push({ scene: best.s, words: pick });
           budget -= pick.length;
         }
-        // 3) leftover budget: core-first top-up (words without scenes)
+        // 3) leftover budget: current-theme words first (the arc
+        //    drives the order), then core-first top-up
+        if (budget > 0 && curId) {
+          const pool = Lexicon.themePool(curId)
+            .filter((w) => !used.has(w) && !cards[w])
+            .sort((a, b) => ((Lexicon.get(a) || {}).p || 2) - ((Lexicon.get(b) || {}).p || 2));
+          for (const w of pool) {
+            if (budget <= 0) break;
+            used.add(w);
+            const ent = Lexicon.get(w) || { w, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+            groups.push({ scene: null, words: [{ key: w, ent, card: null, isNew: true, hot: false }] });
+            budget--;
+          }
+        }
         if (budget > 0) {
           const extras = Lexicon.newCandidates(budget, 0, 0);
           for (const n of extras) {
@@ -576,15 +594,25 @@
     },
 
     renderPhase() {
+      if (this._recKeyHandler) {
+        document.removeEventListener("keydown", this._recKeyHandler);
+        this._recKeyHandler = null;
+      }
       const s = this.session;
-      const item = this.curWord();
-      const totalWords = s.groups.reduce((n, g) => n + g.words.length, 0);
-      const pos = s.groups.slice(0, s.gi).reduce((n, g) => n + g.words.length, 0) + s.wi + 1;
-      $("mcMode").textContent = (item.hot ? "HOT ZONE: " : "") + (item.isNew ? "NEW WORD" : "REVIEW");
-      $("mcMeta").textContent = "SCENE " + (s.gi + 1) + "/" + s.groups.length +
-        " · WORD " + pos + "/" + totalWords + (item.hot ? " · 🔥 FLAGGED" : "");
-      $("mcProgress").style.width = ((pos - 1) / totalWords) * 100 + "%";
+      // the result card has no current word (wi is past the group
+      // end) — header fields are only valid during card phases
+      const isResult = s.phase === "result";
+      const item = isResult ? null : this.curWord();
+      if (item) {
+        const totalWords = s.groups.reduce((n, g) => n + g.words.length, 0);
+        const pos = s.groups.slice(0, s.gi).reduce((n, g) => n + g.words.length, 0) + s.wi + 1;
+        $("mcMode").textContent = (item.hot ? "HOT ZONE: " : "") + (item.isNew ? "NEW WORD" : "REVIEW");
+        $("mcMeta").textContent = "SCENE " + (s.gi + 1) + "/" + s.groups.length +
+          " · WORD " + pos + "/" + totalWords + (item.hot ? " · 🔥 FLAGGED" : "");
+        $("mcProgress").style.width = ((pos - 1) / totalWords) * 100 + "%";
+      }
       if (s.phase === "meaning") this.renderMeaning();
+      else if (s.phase === "recognize") this.renderRecognize(item);
       else if (s.phase === "spell") this.renderSpell(item);
       else if (s.phase === "gap") this.renderGap(item);
       else if (s.phase === "result") this.renderGroupResult();
@@ -601,7 +629,8 @@
       const s = this.session;
       if (!s) return;
       if (s.phase === "gap") { s.phase = "spell"; this.renderPhase(); return; }
-      if (s.phase === "spell") { s.phase = "meaning"; this.renderPhase(); return; }
+      if (s.phase === "spell") { s.phase = "recognize"; this.renderPhase(); return; }
+      if (s.phase === "recognize") { s.phase = "meaning"; this.renderPhase(); return; }
       // meaning / result -> previous group's result
       if (s.gi > 0) {
         s.gi--;
@@ -614,14 +643,21 @@
     goNext() {
       const s = this.session;
       if (!s) return;
-      if (s.phase === "meaning") { s.phase = "spell"; this.renderPhase(); return; }
-      if (s.phase === "spell") { this.advanceToGap(); return; }
+      if (s.phase === "meaning") { s.phase = "recognize"; this.renderPhase(); return; }
+      if (s.phase === "recognize") { s.phase = "spell"; this.renderPhase(); return; }
+      if (s.phase === "spell") {
+        // new words get a gap-fill pass; reviews are done after spelling
+        if (this.curWord().isNew) this.advanceToGap();
+        else this.finishWord();
+        return;
+      }
       if (s.phase === "gap") { this.gapNext(); return; }
       if (s.phase === "result") {
         s.gi++;
         s.wi = 0;
         if (s.gi >= s.groups.length) { this.endSession(); return; }
-        s.phase = "meaning";
+        // review groups skip the scene-listening stage — recognition first
+        s.phase = s.groups[s.gi].words[0].isNew ? "meaning" : "recognize";
         this.renderPhase();
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
@@ -668,7 +704,8 @@
         const inner = this.senseListHtml(senses, showTrans) ||
           '<div class="sense-text">' + this.esc(it.ent.t || "") + "</div>";
         return '<div class="sense-word-block">' +
-          '<span class="sense-word">' + this.esc(it.ent.w) + "</span>" + inner + "</div>";
+          '<span class="sense-word">' + this.esc(it.ent.w) + "</span>" +
+          this.metaHtml(it) + inner + "</div>";
       }).join("");
 
       $("cardStage").innerHTML =
@@ -684,7 +721,7 @@
         '<div class="card-tts">' +
         '<button class="tts-btn" id="btnScene">◉ PLAY SCENE</button> ' +
         '<button class="tts-btn" id="btnWord">◉ WORD ONLY</button></div>' +
-        this.navBar("btnBack", "btnPhaseNext", "CONTINUE TO SPELL", s.gi === 0) +
+        this.navBar("btnBack", "btnPhaseNext", "CONTINUE TO RECOGNIZE", s.gi === 0) +
         '<div class="card-index">SCENE AUDIO PLAYS AUTOMATICALLY — EVERY WORD IN CONTEXT</div>' +
         "</div>";
       const sceneAudio = sceneSents[0] || item.ent.w;
@@ -692,13 +729,141 @@
       $("btnScene").addEventListener("click", () => this.speakScene(sceneAudio, sceneEl));
       $("btnWord").addEventListener("click", () => this.speak(item.ent.w));
       $("btnPhaseNext").addEventListener("click", () => {
-        s.phase = "spell";
+        s.phase = "recognize";
         this.renderPhase();
       });
       const backEl = $("btnBack");
       if (backEl) backEl.addEventListener("click", () => this.goBack());
       // auto-play the whole scene sentence with word highlighting
       setTimeout(() => this.speakScene(sceneAudio, sceneEl), 350);
+    },
+
+    /* word meta line: phonetic + root/family, shown under the word
+     * in MEANING and RECOGNIZE so "from the root" is always visible */
+    metaHtml(item) {
+      const ent = item.ent;
+      const phone = (ent.uk || ent.us || "").replace(/^\[|\]$/g, "");
+      let html = '<div class="word-meta">';
+      if (phone) html += '<span class="word-phone">' + this.esc(phone) + "</span>";
+      const fam = Lexicon.wordFamily(item.key);
+      if (fam.roots.length) {
+        html += '<span class="word-root">' + fam.roots.map((r) =>
+          "ROOT " + this.esc(r.r) + "- " + this.esc(r.m)).join(" · ") + "</span>";
+      } else if (fam.family.length) {
+        html += '<span class="word-root">同族: ' + this.esc(fam.family.slice(0, 3).join(", ")) + "</span>";
+      }
+      html += "</div>";
+      return html;
+    },
+
+    /* recognition-choice distractor pool: words of the same theme
+     * first (similar meanings make for harder, more useful choices) */
+    _distractors(key, n) {
+      const out = [];
+      const seen = new Set([key]);
+      const cur = Lexicon.currentTheme();
+      const addPool = (ws) => {
+        for (const w of ws) {
+          if (seen.has(w)) continue;
+          const zh = this.zhHead(w);
+          if (!zh || zh.includes("（") || zh.length > 24) continue;
+          seen.add(w);
+          out.push(zh);
+          if (out.length >= n) return true;
+        }
+        return false;
+      };
+      if (cur && addPool(Lexicon.themePool(cur.id))) return out;
+      if (addPool(Lexicon.load().keys())) return out;
+      return out;
+    },
+
+    /* first Chinese sense of a word, cleaned of 【】 annotations */
+    zhHead(key) {
+      const senses = Lexicon.senses(key);
+      for (const s2 of senses) {
+        if (s2.zh) return String(s2.zh).replace(/【[^】]*】/g, " ").split(/[；;]/)[0].trim();
+      }
+      const ent = Lexicon.get(key);
+      const t = ent && ent.t ? String(ent.t) : "";
+      const g = t.replace(/【[^】]*】/g, " ").split(/[；;]/)[0].replace(/^[a-z]+\.\s*/i, "").trim();
+      return g || null;
+    },
+
+    /* ---- phase 1.5: recognize the word's meaning (4-choice) ----
+     * identification before recall: see the word (with root/family
+     * and phonetic), pick its meaning; wrong picks are corrected
+     * and cap the final grade at HARD. */
+    renderRecognize(item) {
+      const s = this.session;
+      const ent = item.ent;
+      const group = s.groups[s.gi];
+      const zh = this.zhHead(item.key) || ent.t || "";
+      const opts = [zh].concat(this._distractors(item.key, 3));
+      // shuffle while keeping the answer in the list
+      for (let i = opts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = opts[i]; opts[i] = opts[j]; opts[j] = tmp;
+      }
+      const ansIdx = opts.indexOf(zh);
+
+      $("cardStage").innerHTML =
+        '<div class="card sense-card">' +
+        '<span class="card-wp">SCENE ' + (s.gi + 1) + "/" + s.groups.length +
+        " · WORD " + (s.wi + 1) + "/" + group.words.length + "</span>" +
+        '<span class="card-status learn">RECOGNITION</span>' +
+        '<div class="sense-label">' + (item.isNew ? "STAGE 2 · PICK THE MEANING" : "STAGE 1 · PICK THE MEANING") + "</div>" +
+        '<div class="recognize-word">' + this.esc(ent.w) + "</div>" +
+        this.metaHtml(item) +
+        '<div class="recognize-opts" id="recOpts">' +
+        opts.map((o, i) => '<button class="rec-opt" data-i="' + i + '"><span class="rec-key">' + (i + 1) + "</span>" +
+          this.esc(o) + "</button>").join("") +
+        "</div>" +
+        '<div class="typing-feedback" id="recFeedback"></div>' +
+        '<div class="step-bar nav-bar" id="recNav" style="display:none">' +
+        '<button class="btn" id="btnBack2">◀ BACK</button>' +
+        '<button class="btn btn-primary" id="btnRecNext">CONTINUE TO SPELL ▸</button></div>' +
+        '<div class="card-index">KEYS 1-4 TO PICK · CORRECT MEANING BEFORE SPELLING</div>' +
+        "</div>";
+
+      const fb = $("recFeedback");
+      const nav = $("recNav");
+      const optsEl = $("recOpts");
+      const lock = () => {
+        optsEl.querySelectorAll(".rec-opt").forEach((b) => (b.disabled = true));
+        nav.style.display = "flex";
+      };
+      const pick = (idx) => {
+        if (fb.dataset.done) return;
+        fb.dataset.done = "1";
+        const correct = idx === ansIdx;
+        s.scores[item.key] = Object.assign({ recOk: correct ? 1 : 0 }, s.scores[item.key]);
+        optsEl.querySelectorAll(".rec-opt").forEach((b, i) => {
+          b.classList.add(i === ansIdx ? "rec-correct" : (i === idx ? "rec-wrong" : "rec-dim"));
+        });
+        fb.className = "typing-feedback " + (correct ? "ok" : "err");
+        fb.textContent = correct
+          ? "✓ " + zh
+          : "✗ " + opts[idx] + " — CORRECT: " + zh;
+        lock();
+      };
+      optsEl.querySelectorAll(".rec-opt").forEach((b) =>
+        b.addEventListener("click", () => pick(parseInt(b.dataset.i, 10))));
+      const onKey = (e) => {
+        if (e.key >= "1" && e.key <= "4") {
+          const i = parseInt(e.key, 10) - 1;
+          if (i < opts.length) pick(i);
+        } else if (e.key === "Enter") {
+          if (fb.dataset.done) this.goNext();
+        } else if (e.key === " ") {
+          e.preventDefault();
+          this.speak(ent.w);
+        }
+      };
+      this._recKeyHandler = onKey;
+      document.addEventListener("keydown", onKey);
+      $("btnRecNext").addEventListener("click", () => this.goNext());
+      $("btnBack2").addEventListener("click", () => this.goBack());
     },
 
     /* ---- phase 2: spell with letter-by-letter hints ---- */
@@ -760,14 +925,15 @@
       const fullRevealed = this._hint >= target.length;
       if (ans === targetNorm || (fullRevealed && ans.length === targetNorm.length && ans.length > 0)) {
         const withHints = this._hint > 0;
-        s.scores[item.key] = { spell: withHints ? 0.5 : 1, gapOk: 0, gapTotal: 0 };
+        const prev = s.scores[item.key] || {};
+        s.scores[item.key] = { recOk: prev.recOk == null ? 1 : prev.recOk, spell: withHints ? 0.5 : 1, gapOk: 0, gapTotal: 0 };
         fb.className = "typing-feedback ok";
         fb.textContent = "✓ CORRECT" + (withHints ? " (WITH " + this._hint + " LETTER HINT" + (this._hint > 1 ? "S" : "") + ")" : " — NO HINTS");
         hint.textContent = "";
         input.readOnly = true;
-        input.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") this.advanceToGap();
-        });
+        // phase advance is handled by the global Enter shortcut
+        // (read-only inputs still bubble), so pressing Enter once
+        // never double-steps across spell/gap
         return;
       }
       // wrong: reveal one more letter (never beyond the word length)
@@ -864,9 +1030,6 @@
       fb.className = "typing-feedback " + (ok ? "ok" : "err");
       fb.textContent = ok ? "✓ FILLED CORRECTLY" : "✗ " + expected;
       input.readOnly = true;
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") this.gapNext();
-      });
     },
 
     gapNext() {
@@ -893,19 +1056,23 @@
     finishWord() {
       const s = this.session;
       const item = this.curWord();
-      const sc = s.scores[item.key] || { spell: 0, gapOk: 0, gapTotal: 0 };
+      const sc = s.scores[item.key] || { recOk: 1, spell: 0, gapOk: 0, gapTotal: 0 };
       const total = 1 + (sc.gapTotal || 0);
       const got = (sc.spell || 0) + (sc.gapOk || 0);
       const rate = got / total;
-      const q = rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : rate >= 0.5 ? 1 : 0;
+      let q = rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : rate >= 0.5 ? 1 : 0;
+      // recognition failure caps the grade — identification before recall
+      if (sc.recOk === 0 && q > 1) q = 1;
       this.applyGrade(item, q);
       s.wi++;
       if (s.wi >= s.groups[s.gi].words.length) {
         s.phase = "result";
         this.renderPhase();
       } else {
-        // the scene was already heard — the next word starts at spelling
-        s.phase = "spell";
+        // new words re-enter at recognition; reviews jump straight
+        // to spelling (the scene was already covered)
+        const next = s.groups[s.gi].words[s.wi];
+        s.phase = next.isNew ? "recognize" : "spell";
         this.renderPhase();
       }
     },
@@ -925,7 +1092,7 @@
         const cls = pct >= 70 ? "ok" : pct >= 50 ? "warn" : "err";
         rows += '<div class="gr-row"><span class="gr-word">' + this.esc(item.ent.w) + "</span>" +
           '<div class="statbar"><div class="statbar-fill" style="width:' + pct + '%"></div></div>' +
-          '<span class="gr-rate ' + cls + '">' + pct + "% · " + label + "</span></div>";
+          '<span class="gr-rate ' + cls + '">' + pct + "% · " + label + (sc.recOk === 0 ? " · REC ✗" : "") + "</span></div>";
       }
       const groupPct = Math.round(sum / group.words.length);
       $("mcMode").textContent = "GROUP COMPLETE";
@@ -951,7 +1118,7 @@
         s.gi++;
         s.wi = 0;
         if (s.gi >= s.groups.length) { this.endSession(); return; }
-        s.phase = "meaning";
+        s.phase = s.groups[s.gi].words[0].isNew ? "meaning" : "recognize";
         this.renderPhase();
       });
     },
@@ -991,8 +1158,8 @@
 
     endSession() {
       const s = this.session;
-      Lexicon.logStudy(s.newDone - s._logged.n, s.revDone - s._logged.r);
-      WordAnnotate.refresh();
+      const lg = s._logged || { n: 0, r: 0 };
+      Lexicon.logStudy(s.newDone - lg.n, s.revDone - lg.r);
       $("mcProgress").style.width = "100%";
       $("mcMode").textContent = "MISSION COMPLETE";
       $("mcMeta").textContent = "NEW " + s.newDone + " · REVIEW " + s.revDone + " · RETRY " + s.failed;
@@ -1218,9 +1385,9 @@
       $("dkList").querySelectorAll("[data-review]").forEach((b) =>
         b.addEventListener("click", () => this.forceReview(b.dataset.review)));
       $("dkList").querySelectorAll("[data-flag]").forEach((b) =>
-        b.addEventListener("click", () => { Lexicon.addUnfamiliar(b.dataset.flag, "manual"); WordAnnotate.refresh(); this.renderDeck(); this.renderAll(); }));
+        b.addEventListener("click", () => { Lexicon.addUnfamiliar(b.dataset.flag, "manual"); this.renderDeck(); this.renderAll(); }));
       $("dkList").querySelectorAll("[data-unflag]").forEach((b) =>
-        b.addEventListener("click", () => { Lexicon.removeUnfamiliar(b.dataset.unflag); WordAnnotate.refresh(); this.renderDeck(); this.renderAll(); }));
+        b.addEventListener("click", () => { Lexicon.removeUnfamiliar(b.dataset.unflag); this.renderDeck(); this.renderAll(); }));
     },
 
     /* force a single word into an immediate review session */
@@ -1231,10 +1398,13 @@
       const due = Lexicon.dueCards().filter((d) => d.key !== key);
       const queue = due.map((d) => ({ key: d.key, ent: Lexicon.get(d.key), card: d.card, isNew: false, hot: Lexicon.isUnfamiliar(d.key) }));
       queue.unshift({ key, ent, card, isNew: false, hot: Lexicon.isUnfamiliar(key) });
-      const groups = this.buildGroups(queue);
+      const groups = this.buildGroups(queue, true);
       this.session = {
-        queue, groups, gi: 0, wi: 0, phase: "meaning",
-        scores: {}, newDone: 0, revDone: 0, failed: 0
+        queue, groups, gi: 0, wi: 0,
+        phase: (groups[0] && groups[0].words[0].isNew) ? "meaning" : "recognize",
+        scores: {}, newDone: 0, revDone: 0, failed: 0,
+        _logged: { n: 0, r: 0 },
+        startedAt: new Date().toISOString()
       };
       this.vsub = "train";
       this.switchView("vocab");
@@ -1310,8 +1480,7 @@
           } catch (e) {
             n = Lexicon.importWords(text);
           }
-          WordAnnotate.refresh();
-          this.renderLog();
+              this.renderLog();
           this.renderAll();
           global.alert("IMPORTED — RECORDS: " + n);
         } catch (e) {
@@ -1484,8 +1653,10 @@
           else if (k === "ArrowRight") { e.preventDefault(); this.goNext(); }
           else if (k === "Enter") {
             e.preventDefault();
-            if (this.session.phase === "spell") this.advanceToGap();
-            else if (this.session.phase === "gap") this.gapNext();
+            if (this.session.phase === "spell") {
+              if (this.curWord().isNew) this.advanceToGap();
+              else this.finishWord();
+            } else if (this.session.phase === "gap") this.gapNext();
           } else if (k === " ") {
             e.preventDefault();
             const item = this.curWord();

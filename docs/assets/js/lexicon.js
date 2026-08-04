@@ -168,10 +168,11 @@
     saveState() { writeLS(LS_STATE, this.state()); },
 
     /* ---- real-context example index ----
-     * Builds word -> sentence(s) from the practice corpus (reading
-     * passages, listening transcripts, writing prompts, quick
-     * drills) so gap-fill exercises use authentic IELTS-style
-     * sentences instead of memorised lists. Indexed by stem. */
+     * Builds word -> sentence(s) from the English definition and
+     * example sentences of the lexicon itself (defs + core-vocab),
+     * so gap-fill exercises use short, natural sentences. Indexed
+     * by stem. Sentences are kept short (12-160 chars) — long
+     * corpus passages no longer feed the study flow. */
     _exampleIndex: null,
     _exampleIndexBuilt: false,
 
@@ -184,7 +185,7 @@
         const sents = String(text || "").split(/(?<=[.!?])\s+/);
         for (const s of sents) {
           const t = s.trim();
-          if (t.length < 20 || t.length > 400) continue;
+          if (t.length < 12 || t.length > 160) continue;
           const words = t.match(/[A-Za-z][A-Za-z'-]*/g) || [];
           const keys = new Set(words.map((w) => this.stem(w.toLowerCase())));
           for (const k of keys) {
@@ -195,15 +196,7 @@
         }
       };
       const g = global;
-      ((g.READING_TESTS || [])).forEach((t) =>
-        t.passages.forEach((p) => p.paras.forEach((pa) => addSentence(pa.text))));
-      ((g.LISTENING_FULL || [])).forEach((s) =>
-        s.sections.forEach((sec) => addSentence(sec.transcript)));
-      ((g.LISTENING_SETS || [])).forEach((s) =>
-        s.items.forEach((i) => addSentence(i.audio || i.q || "")));
-      ((g.WRITING_TASKS || [])).forEach((t) => addSentence(t.prompt));
-      // English definition/example sentences (4000 EEW etc.) fill
-      // words the practice corpus never mentions — corpus stays first
+      // English definition/example sentences (4000 EEW etc.)
       const defs = g.IELTS_DEFS || {};
       for (const k in defs) {
         if (defs[k].e) addSentence(defs[k].e);
@@ -232,6 +225,142 @@
       return s;
     },
 
+    /* ---- cognitive theme arc (认知弧线) ----
+     * Each word is tagged to one of the 22 arc themes via
+     * THEME_MATCH (Chinese gloss + EN definition + word stem).
+     * A word with no hit belongs to the GENERAL pool and is
+     * scheduled as filler around the arc themes. Plural rows
+     * ("accidents" glossed as "事故的复数") retry with the stem. */
+    _themeCache: null,
+    themeOf(key) {
+      const k = String(key).toLowerCase();
+      if (this._themeCache) {
+        const c = this._themeCache.get(k);
+        return c === undefined ? null : c;
+      }
+      if (!global.THEME_MATCH) return null;
+      this._themeCache = new Map();
+      const m = this.load();
+      for (const [word, ent] of m) {
+        let t = global.THEME_MATCH(word, ent.t, (ent.d || "") + " " + (ent.e || ""));
+        if (!t) {
+          const st = this.stem(word);
+          if (st !== word) {
+            const pe = m.get(st);
+            if (pe && pe !== ent) {
+              t = global.THEME_MATCH(st, pe.t, (pe.d || "") + " " + (pe.e || ""));
+            }
+          }
+        }
+        this._themeCache.set(word, t);
+      }
+      return this._themeCache.get(k) === undefined ? null : this._themeCache.get(k);
+    },
+
+    /* theme id -> words of the study lexicon in that theme
+     * (arc order preserved when iterating THEME_ARC) */
+    themePool(themeId) {
+      const out = [];
+      for (const key of this.load().keys()) {
+        if (this.themeOf(key) === themeId) out.push(key);
+      }
+      return out;
+    },
+
+    /* the first arc theme that still has unstudied words (no card
+     * yet) — the theme the daily new-word budget is drawn from */
+    currentTheme() {
+      const cards = this.cards();
+      const arc = global.THEME_ARC || [];
+      for (const t of arc) {
+        for (const w of this.themePool(t.id)) {
+          if (!cards[w]) return t;
+        }
+      }
+      return arc[arc.length - 1] || null;
+    },
+
+    /* per-theme progress for the THEME ARC panel */
+    themeStats() {
+      const cards = this.cards();
+      const arc = global.THEME_ARC || [];
+      const out = [];
+      let general = { learned: 0, total: 0 };
+      const pools = {};
+      for (const t of arc) pools[t.id] = this.themePool(t.id);
+      for (const t of arc) {
+        let total = 0, learned = 0;
+        for (const w of pools[t.id]) {
+          total++;
+          if (cards[w]) learned++;
+        }
+        out.push({ id: t.id, name: t.name, total, learned, done: total > 0 && learned >= total });
+      }
+      // general pool (untagged words)
+      for (const key of this.load().keys()) {
+        const t = this.themeOf(key);
+        if (!t) {
+          general.total++;
+          if (cards[key]) general.learned++;
+        }
+      }
+      return { arc: out, general };
+    },
+
+    /* ---- word family (词根/词族) ----
+     * 1) root hits: word starts with / ends with / follows a known
+     *    prefix before a root (con+tempor+ary); EXCLUDE guards
+     *    known collisions ("sol" ≠ solve).
+     * 2) rule family: strip a derivational suffix and cluster
+     *    lexicon words sharing the stem. */
+    _PREFIX_LIST: null,
+    wordFamily(key) {
+      const lower = String(key).toLowerCase();
+      if (lower.length < 3) return { roots: [], family: [] };
+      const roots = [];
+      const ex = global.ROOT_EXCLUDE || {};
+      const exclude = (r) => (ex[r] || []).indexOf(lower) >= 0;
+      const PREFIXES = global.WORD_PREFIXES || [];
+      const stripPrefix = (w) => {
+        for (const [p] of PREFIXES) {
+          if (w.startsWith(p) && w.length > p.length + 2) return w.slice(p.length);
+        }
+        return w;
+      };
+      // roots: [root, meaning, examples]
+      for (const row of (global.WORD_ROOTS || [])) {
+        const [r, m, exs] = row;
+        if (r.length < 3 || exclude(r)) continue;
+        let hit = false;
+        if (lower.startsWith(r)) hit = true;
+        else if (lower.endsWith(r) && lower.length > r.length + 1) hit = true;
+        else if (stripPrefix(lower).startsWith(r)) hit = true;
+        if (hit) {
+          roots.push({ r: r, m: m, ex: String(exs).split(" ").slice(0, 3) });
+          if (roots.length >= 2) break;
+        }
+      }
+      // rule family via suffix stripping
+      const family = [];
+      const SUFFIXES = global.ROOT_SUFFIXES || [];
+      for (const suf of SUFFIXES) {
+        if (lower.endsWith(suf) && lower.length - suf.length >= 4) {
+          const stem = lower.slice(0, -suf.length);
+          for (const w of this.load().keys()) {
+            if (w === lower) continue;
+            if (w.startsWith(stem) || (w.endsWith("s") && w.slice(0, -1) === stem) ||
+                (w.endsWith("es") && w.slice(0, -2) === stem) ||
+                (w.endsWith("ied") && w.slice(0, -3) + "y" === stem)) {
+              if (!family.includes(w)) family.push(w);
+            }
+            if (family.length >= 5) break;
+          }
+          break;
+        }
+      }
+      return { roots: roots, family: family };
+    },
+
     /* up to `limit` real sentences containing the word (any inflection).
      * Falls back to the word's curated/EEW example, then its English
      * definition sentence, so every word can be studied in context. */
@@ -253,10 +382,10 @@
     },
 
     /* ---- sentence bank (句表) ----
-     * Reverse index: every sentence in the example corpus (practice
-     * passages + English definition/example sentences) mapped to the
-     * study words it contains, so daily groups can be built around
-     * one scene that carries several words at once. */
+     * Reverse index: every short English definition/example
+     * sentence mapped to the study words it contains, so daily
+     * groups can be built around one scene that carries several
+     * words at once. */
     _bank: null,
     buildSentenceBank() {
       if (this._bank) return this._bank;

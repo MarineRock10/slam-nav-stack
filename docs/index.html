@@ -30,9 +30,6 @@
   <nav class="tabs">
     <button class="tab active" data-view="stats">STATISTICS</button>
     <button class="tab" data-view="vocab">VOCABULARY</button>
-    <button class="tab" data-view="listen">LISTENING</button>
-    <button class="tab" data-view="read">READING</button>
-    <button class="tab" data-view="write">WRITING</button>
     <button class="tab tab-icon" id="btnSettings" title="SYSTEM CONFIG">⚙ CONFIG</button>
   </nav>
 
@@ -120,8 +117,8 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title"><span class="pt-dot"></span>MODULE STATS <span class="pt-tag">SUITE</span></div>
-        <div class="mod-stats" id="stModStats"></div>
+        <div class="panel-title"><span class="pt-dot"></span>THEME ARC <span class="pt-tag">COGNITIVE ORDER</span></div>
+        <div class="theme-arc" id="stThemeArc"></div>
       </div>
     </section>
 
@@ -191,28 +188,6 @@
     </section>
 
     <!-- ==================== VIEW 3: LISTENING ==================== -->
-    <section id="view-listen" class="view">
-      <div class="panel">
-        <div class="panel-title"><span class="pt-dot"></span>ACOUSTIC TELEMETRY <span class="pt-tag">TTS</span></div>
-        <div id="listenContainer"></div>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 4: READING ==================== -->
-    <section id="view-read" class="view">
-      <div class="panel">
-        <div class="panel-title"><span class="pt-dot"></span>SENSOR DATA PARSING <span class="pt-tag">5 TESTS</span></div>
-        <div id="readContainer"></div>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 5: WRITING ==================== -->
-    <section id="view-write" class="view">
-      <div class="panel">
-        <div class="panel-title"><span class="pt-dot"></span>MISSION REPORT GENERATOR <span class="pt-tag">WRITING</span></div>
-        <div id="writeContainer"></div>
-      </div>
-    </section>
   </main>
 
   <!-- ==================== SETTINGS MODAL ==================== -->
@@ -299,19 +274,11 @@
 <script src="assets/js/words/defs-gen-5.js"></script>
 <script src="assets/js/words/sentence-zh-1.js"></script>
 <script src="assets/js/words/ielts-data.js"></script>
+<script src="assets/js/words/theme-map.js"></script>
+<script src="assets/js/words/roots.js"></script>
 <script src="assets/js/srs.js"></script>
 <script src="assets/js/lexicon.js"></script>
 <script src="assets/js/telemetry.js"></script>
-<script src="assets/js/suite/word-annotate.js"></script>
-<script src="assets/js/suite/data-listening.js"></script>
-<script src="assets/js/suite/data-listening-full.js"></script>
-<script src="assets/js/suite/data-reading.js"></script>
-<script src="assets/js/suite/data-writing.js"></script>
-<script src="assets/js/suite/suite.js"></script>
-<script src="assets/js/suite/listening.js"></script>
-<script src="assets/js/suite/listening-full.js"></script>
-<script src="assets/js/suite/reading.js"></script>
-<script src="assets/js/suite/writing.js"></script>
 <script src="assets/js/cloud.js"></script>
 <script src="assets/js/main.js"></script>
 </body>
