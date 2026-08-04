@@ -763,12 +763,24 @@
 
     /* recognition-choice distractor pool: words of the same theme
      * first (similar meanings make for harder, more useful choices) */
+    /* shuffle a stable iterable so distractors differ every card */
+    _shuffled(arr) {
+      const a = Array.from(arr);
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = a[i]; a[i] = a[j]; a[j] = t;
+      }
+      return a;
+    },
+
     _distractors(key, n) {
       const out = [];
       const seen = new Set([key]);
       const cur = Lexicon.currentTheme();
-      const pool = cur ? Lexicon.themePool(cur.id) : [];
-      const all = Lexicon.load().keys();
+      // random draws from the theme pool — never the same three
+      // faces on every card
+      const pool = cur ? this._shuffled(Lexicon.themePool(cur.id)) : [];
+      const all = this._shuffled(Lexicon.load().keys());
       // strict pass first (clean short Chinese glosses), then a
       // lenient pass so options never come up short
       const addPool = (ws, strict) => {
