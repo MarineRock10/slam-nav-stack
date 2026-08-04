@@ -706,13 +706,16 @@
         this.sceneZhHtml(s2) +
         "</div>"
       ).join("");
-      // senses of every word in the scene — the sentence brings them in together
+      // senses of every word in the scene — the sentence brings them in together;
+      // each word carries its own play button (the big bottom audio
+      // bar is gone — per-word and per-sentence audio only)
       const wordBlocks = group.words.map((it) => {
         const senses = Lexicon.senses(it.key);
         const inner = this.senseListHtml(senses, showTrans) ||
           '<div class="sense-text">' + this.esc(it.ent.t || "") + "</div>";
         return '<div class="sense-word-block">' +
           '<span class="sense-word">' + this.esc(it.ent.w) + "</span>" +
+          '<button class="tts-btn word-play" title="PLAY WORD" data-play="' + this.esc(it.key) + '">◉</button>' +
           this.metaHtml(it) + inner + "</div>";
       }).join("");
 
@@ -726,38 +729,29 @@
         group.words.map((w) => this.esc(w.ent.w)).join(" · ") + "</div>" +
         (sceneHtml || '<div class="card-def big">' + this.esc(group.words[0].ent.t || "") + "</div>") +
         '<div class="sense-list">' + wordBlocks + "</div>" +
-        '<div class="card-tts">' +
-        '<button class="tts-btn" id="btnScene">◉ PLAY SCENE</button> ' +
-        '<button class="tts-btn" id="btnWord">◉ WORD ONLY</button></div>' +
         this.navBar("btnBack", "btnPhaseNext", "CONTINUE TO RECOGNIZE", s.gi === 0) +
         '<div class="card-index">SCENE AUDIO PLAYS AUTOMATICALLY — EVERY WORD IN CONTEXT</div>' +
         "</div>";
       const sceneAudio = sceneSents[0] || item.ent.w;
       const sceneEl = $("sceneTxt0");
-      $("btnScene").addEventListener("click", () => this.speakScene(sceneAudio, sceneEl));
       // every scene sentence gets its own play button (a scene can
       // carry two sentences — both must be hearable)
       sceneSents.forEach((s2, i) => {
         const b = $("btnScenePlay" + i);
         if (b) b.addEventListener("click", () => this.speakScene(s2, $("sceneTxt" + i)));
       });
-      // WORD ONLY reads every study word of the scene in order,
-      // not just the current card's word
-      $("btnWord").addEventListener("click", () => {
-        let delay = 0;
-        for (const it of group.words) {
-          setTimeout(() => this.speak(it.ent.w), delay);
-          delay += Math.max(700, it.ent.w.length * 100);
-        }
+      // per-word play buttons replace the bottom audio bar
+      $("cardStage").querySelectorAll(".word-play").forEach((b) => {
+        b.addEventListener("click", () => this.speak(b.dataset.play));
       });
+      // auto-play the whole scene sentence with word highlighting
+      setTimeout(() => this.speakScene(sceneAudio, sceneEl), 350);
       $("btnPhaseNext").addEventListener("click", () => {
         s.phase = "recognize";
         this.renderPhase();
       });
       const backEl = $("btnBack");
       if (backEl) backEl.addEventListener("click", () => this.goBack());
-      // auto-play the whole scene sentence with word highlighting
-      setTimeout(() => this.speakScene(sceneAudio, sceneEl), 350);
     },
 
     /* word meta line: phonetic + root/family, shown under the word

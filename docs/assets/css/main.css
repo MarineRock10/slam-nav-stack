@@ -1224,3 +1224,13 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   font-size: var(--fs-tiny);
 }
 .scene-play:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* per-word play button inside the sense word block */
+.sense-word-block { position: relative; }
+.word-play {
+  margin-left: var(--sp-2);
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  vertical-align: 1px;
+}
+.word-play:hover { border-color: var(--cyan); color: var(--cyan); }
