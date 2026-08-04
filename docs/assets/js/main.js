@@ -702,6 +702,7 @@
       const sceneHtml = sceneSents.map((s2, i) =>
         '<div class="scene-sentence">' + (sceneSents.length > 1 ? "<span class='scene-no'>" + (i + 1) + "</span>" : "") +
         '<span class="scene-text" id="sceneTxt' + i + '">“' + this.highlightWords(s2, group.words.map((w) => w.ent.w)) + '”</span>' +
+        '<button class="tts-btn scene-play" id="btnScenePlay' + i + '">◉ PLAY</button>' +
         this.sceneZhHtml(s2) +
         "</div>"
       ).join("");
@@ -734,7 +735,21 @@
       const sceneAudio = sceneSents[0] || item.ent.w;
       const sceneEl = $("sceneTxt0");
       $("btnScene").addEventListener("click", () => this.speakScene(sceneAudio, sceneEl));
-      $("btnWord").addEventListener("click", () => this.speak(item.ent.w));
+      // every scene sentence gets its own play button (a scene can
+      // carry two sentences — both must be hearable)
+      sceneSents.forEach((s2, i) => {
+        const b = $("btnScenePlay" + i);
+        if (b) b.addEventListener("click", () => this.speakScene(s2, $("sceneTxt" + i)));
+      });
+      // WORD ONLY reads every study word of the scene in order,
+      // not just the current card's word
+      $("btnWord").addEventListener("click", () => {
+        let delay = 0;
+        for (const it of group.words) {
+          setTimeout(() => this.speak(it.ent.w), delay);
+          delay += Math.max(700, it.ent.w.length * 100);
+        }
+      });
       $("btnPhaseNext").addEventListener("click", () => {
         s.phase = "recognize";
         this.renderPhase();

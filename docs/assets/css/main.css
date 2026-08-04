@@ -1215,3 +1215,12 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   .flow-steps { grid-template-columns: 1fr; }
   .queue-legend { gap: var(--sp-1) var(--sp-3); }
 }
+
+/* per-sentence play button inside the scene block */
+.scene-play {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-tiny);
+}
+.scene-play:hover { border-color: var(--cyan); color: var(--cyan); }
