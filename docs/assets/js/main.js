@@ -668,13 +668,20 @@
         '<button class="btn btn-primary" id="' + nextId + '">' + nextLabel + " ▸</button></div>";
     },
 
-    senseListHtml(senses, showTrans) {      return senses.slice(0, 4).map((s2) =>
-        '<div class="sense-item">' +
-        (s2.pos ? '<span class="sense-pos">' + s2.pos + "</span>" : "") +
-        (s2.en ? '<span class="sense-en">' + this.esc(s2.en) + "</span>" : "") +
-        (showTrans && s2.zh ? '<span class="sense-zh">' + this.esc(s2.zh) + "</span>" : "") +
-        "</div>"
-      ).join("");
+    /* maskWord (optional): blank the target word out of English
+     * definitions during spelling, so self-referential definitions
+     * ("A massive thing is very big.") cannot give the answer away */
+    senseListHtml(senses, showTrans, maskWord) {
+      const maskRe = maskWord ? new RegExp("\\b" + Lexicon.escapeRegExp(Lexicon.stem(maskWord.toLowerCase())) + "[a-z]*\\b", "gi") : null;
+      return senses.slice(0, 4).map((s2) => {
+        let en = s2.en || "";
+        if (maskRe) en = String(en).replace(maskRe, "______");
+        return '<div class="sense-item">' +
+          (s2.pos ? '<span class="sense-pos">' + s2.pos + "</span>" : "") +
+          (en ? '<span class="sense-en">' + this.esc(en) + "</span>" : "") +
+          (showTrans && s2.zh ? '<span class="sense-zh">' + this.esc(s2.zh) + "</span>" : "") +
+          "</div>";
+      }).join("");
     },
 
     /* ---- phase 1 (group level): one shared scene carries all words ---- */
@@ -814,6 +821,9 @@
       const g = t.replace(/【[^】]*】/g, " ").split(/[；;]/)[0].replace(/^[a-z]+\.\s*/i, "").trim();
       if (g) return g;
       if (ent && ent.d) {
+        // skip self-referential definitions — they give the answer away
+        const stem = Lexicon.stem(key);
+        if (stem.length >= 4 && new RegExp("\\b" + stem + "[a-z]*\\b", "i").test(ent.d)) return null;
         const d = String(ent.d).split(/[;。]/)[0].trim();
         return d.length > 64 ? d.slice(0, 61) + "…" : d;
       }
@@ -915,7 +925,7 @@
         " · WORD " + (s.wi + 1) + "/" + group.words.length + "</span>" +
         '<span class="card-status learn">WORD SPELLING</span>' +
         '<div class="sense-label">STAGE 2 · HEAR THE WORD — SPELL WITH HINTS</div>' +
-        '<div class="sense-list">' + (this.senseListHtml(senses, showTrans) ||
+        '<div class="sense-list">' + (this.senseListHtml(senses, showTrans, ent.w) ||
           '<div class="sense-text">' + this.esc(ent.t || "") + "</div>") + "</div>" +
         '<div class="card-tts">' +
         '<button class="tts-btn" id="btnWord2">◉ PLAY WORD</button> ' +
