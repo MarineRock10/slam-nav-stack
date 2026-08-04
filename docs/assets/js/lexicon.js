@@ -98,6 +98,14 @@
         if (!ent.us && cz[k].us) ent.us = cz[k].us;
         if (!ent.uk && cz[k].uk) ent.uk = cz[k].uk;
       }
+      // AI-completed phonetics for the 40% of rows missing IPA
+      const pf = global.PHONETIC_FILL || {};
+      for (const k in pf) {
+        const ent = this.get(k);
+        if (!ent) continue;
+        if (!ent.us && pf[k][0]) ent.us = pf[k][0];
+        if (!ent.uk && pf[k][1]) ent.uk = pf[k][1];
+      }
       // English sense definitions (4000 EEW / WordNet) fill gaps:
       // curated core-vocab definitions above always win.
       const defs = global.IELTS_DEFS || {};
