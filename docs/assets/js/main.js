@@ -762,23 +762,31 @@
       const out = [];
       const seen = new Set([key]);
       const cur = Lexicon.currentTheme();
-      const addPool = (ws) => {
+      const pool = cur ? Lexicon.themePool(cur.id) : [];
+      const all = Lexicon.load().keys();
+      // strict pass first (clean short Chinese glosses), then a
+      // lenient pass so options never come up short
+      const addPool = (ws, strict) => {
         for (const w of ws) {
           if (seen.has(w)) continue;
           const zh = this.zhHead(w);
-          if (!zh || zh.includes("（") || zh.length > 24) continue;
+          if (!zh) continue;
+          if (strict && (zh.includes("（") || zh.length > 24)) continue;
+          if (zh.length > 64) continue;
           seen.add(w);
           out.push(zh);
           if (out.length >= n) return true;
         }
         return false;
       };
-      if (cur && addPool(Lexicon.themePool(cur.id))) return out;
-      if (addPool(Lexicon.load().keys())) return out;
+      if (addPool(pool, true) || addPool(pool, false)) return out;
+      if (addPool(all, true) || addPool(all, false)) return out;
       return out;
     },
 
-    /* first Chinese sense of a word, cleaned of 【】 annotations */
+    /* first sense of a word: Chinese gloss when available, else the
+     * English definition (core-vocab words have no Chinese gloss) —
+     * recognition options must never render blank */
     zhHead(key) {
       const senses = Lexicon.senses(key);
       for (const s2 of senses) {
@@ -787,7 +795,12 @@
       const ent = Lexicon.get(key);
       const t = ent && ent.t ? String(ent.t) : "";
       const g = t.replace(/【[^】]*】/g, " ").split(/[；;]/)[0].replace(/^[a-z]+\.\s*/i, "").trim();
-      return g || null;
+      if (g) return g;
+      if (ent && ent.d) {
+        const d = String(ent.d).split(/[;。]/)[0].trim();
+        return d.length > 64 ? d.slice(0, 61) + "…" : d;
+      }
+      return null;
     },
 
     /* ---- phase 1.5: recognize the word's meaning (4-choice) ----
