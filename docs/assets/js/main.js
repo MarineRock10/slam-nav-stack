@@ -970,10 +970,10 @@
       const ans = this.norm(input.value);
       const targetNorm = this.norm(target);
 
-      // correct when normalized input matches — or once the full word
-      // has been revealed, typing it (however slowly) counts
-      const fullRevealed = this._hint >= target.length;
-      if (ans === targetNorm || (fullRevealed && ans.length === targetNorm.length && ans.length > 0)) {
+      // strict: the normalized input must equal the target exactly.
+      // Revealing all letters never auto-passes — a wrong spelling
+      // (submaring) stays wrong even with the full word on screen
+      if (ans === targetNorm) {
         const withHints = this._hint > 0;
         const prev = s.scores[item.key] || {};
         s.scores[item.key] = { recOk: prev.recOk == null ? 1 : prev.recOk, spell: withHints ? 0.5 : 1, gapOk: 0, gapTotal: 0 };
@@ -1079,7 +1079,17 @@
       if (ok) sc.gapOk++;
       fb.className = "typing-feedback " + (ok ? "ok" : "err");
       fb.textContent = ok ? "✓ FILLED CORRECTLY" : "✗ " + expected;
-      input.readOnly = true;
+      if (ok) {
+        // correct: lock the field; Enter (global shortcut) advances
+        input.readOnly = true;
+      } else {
+        // wrong: stay locked in — clear the field and require a
+        // correct retry before the card can move on
+        input.value = "";
+        input.focus();
+        input.classList.add("shake");
+        setTimeout(() => input.classList.remove("shake"), 400);
+      }
     },
 
     /* strict gap-fill acceptance: exact word, the bare root
@@ -1109,7 +1119,13 @@
         const TAILS = ["", "s", "es", "ed", "d", "ing", "ies", "y"];
         for (const r of roots) {
           if (a === r) return true;
-          if (a.startsWith(r) && a.length - r.length <= 3 && TAILS.includes(a.slice(r.length))) return true;
+          if (a.startsWith(r) && a.length - r.length <= 3) {
+            const tail = a.slice(r.length);
+            // doubled stem never takes -s (banns ✗; the 3rd person
+            // of banned is bans)
+            if (TAILS.includes(tail) && !(tail === "s" && r.length > 3 &&
+                r.endsWith(r[r.length - 1] + r[r.length - 1]))) return true;
+          }
         }
         return false;
       }

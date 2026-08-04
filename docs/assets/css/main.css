@@ -1234,3 +1234,11 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   vertical-align: 1px;
 }
 .word-play:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* wrong-answer feedback pulse on gap-fill retry */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+.shake { animation: shake 0.3s ease; }
