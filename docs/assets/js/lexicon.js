@@ -470,6 +470,18 @@
      * multi-part definitions, WordNet gloss order), else attached
      * to the first sense and visible as the word-level EN line. */
     _POS_RE: /^(n|v|vt|vi|adj|adv|prep|conj|art|pron|num|aux|int|abbr)\./i,
+    /* qwerty-learner glosses carry annotation segments that must not
+     * leak into options or sense lists: 【搭配】epidemic prevention 防疫,
+     * 【同根】migrate vi. 迁移 — drop the whole annotated segment
+     * (label + trailing content up to the next separator) */
+    _cleanGloss(s) {
+      return String(s || "")
+        .replace(/【[^】]*】[^；;【]*/g, " ")
+        .replace(/【[^】]*】/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    },
+
     senses(word) {
       const ent = this.get(word);
       if (!ent) return [];
@@ -492,7 +504,7 @@
       let used = 0;
       for (let i = 0; i < parts.length; i++) {
         const pos = posOf(parts[i]);
-        const zh = parts[i].replace(this._POS_RE, "").trim();
+        const zh = this._cleanGloss(parts[i].replace(this._POS_RE, "").trim());
         let en = "";
         if (enParts.length === parts.length) {
           en = enParts[i].replace(this._POS_RE, "").trim();

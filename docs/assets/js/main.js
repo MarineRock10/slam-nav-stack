@@ -818,7 +818,8 @@
       }
       const ent = Lexicon.get(key);
       const t = ent && ent.t ? String(ent.t) : "";
-      const g = t.replace(/【[^】]*】/g, " ").split(/[；;]/)[0].replace(/^[a-z]+\.\s*/i, "").trim();
+      const g = Lexicon._cleanGloss ? Lexicon._cleanGloss(t.split(/[；;]/)[0]).replace(/^[a-z]+\.\s*/i, "").trim() :
+        t.replace(/【[^】]*】/g, " ").split(/[；;]/)[0].replace(/^[a-z]+\.\s*/i, "").trim();
       if (g) return g;
       if (ent && ent.d) {
         // skip self-referential definitions — they give the answer away
@@ -1497,7 +1498,7 @@
       $("lgList").innerHTML = slice.map((r) =>
         '<div class="log-row">' +
         '<span class="log-word">' + this.esc(r.ent.w) + "</span>" +
-        '<span class="log-trans">' + this.esc(r.ent.t) + "</span>" +
+        '<span class="log-trans">' + this.esc(Lexicon._cleanGloss ? Lexicon._cleanGloss(r.ent.t) : r.ent.t) + "</span>" +
         '<span class="log-state"><span class="' + r.cls + '">' + r.state + "</span></span>" +
         "</div>").join("") || '<div class="log-row"><span class="log-word">NO MATCHES</span></div>';
 
