@@ -1071,15 +1071,78 @@
       const re = new RegExp("\\b" + Lexicon.stem(item.ent.w.toLowerCase()) + "[a-z]*\\b", "i");
       const expected = (sentence.match(re) || [item.ent.w])[0];
       const ans = (input.value || "").trim().toLowerCase();
-      // accept the base word or any inflection (storm ~ stormwater)
-      const ok = this.norm(ans) === this.norm(expected) ||
-        Lexicon.stem(this.norm(ans)) === Lexicon.stem(this.norm(expected));
+      // accept the exact word or a real inflection — never a mere
+      // stem collision (bannedd must not pass for banned)
+      const ok = this._gapOk(ans, expected);
       const sc = s.scores[item.key];
       sc.gapTotal++;
       if (ok) sc.gapOk++;
       fb.className = "typing-feedback " + (ok ? "ok" : "err");
       fb.textContent = ok ? "✓ FILLED CORRECTLY" : "✗ " + expected;
       input.readOnly = true;
+    },
+
+    /* strict gap-fill acceptance: exact word, the bare root
+     * (banned → ban), or a genuine inflection of it.
+     *
+     * Inflected expected (banned, stem ≠ word): accept the bare
+     * root or any same-stem inflection (ban/banning/bans), nothing
+     * else — bannedd/bannned never pass.
+     *
+     * Bare expected (run/study/box/go/watch): apply exact rules —
+     *   consonant+y → -ies/-ied/-ying (studies/tried/studying)
+     *   s/x/z/ch/sh → -es (boxes/watches); boxs/watchs ✗
+     *   closed syllable → doubled -ing/-ed (stopping); stoping ✗
+     *   -s 3rd person allowed for closed syllables (runs)
+     *   -d past only after -e (liked)
+     *   -ly derivations rejected (largely ≠ large) */
+    _gapOk(ans, expected) {
+      const a = this.norm(ans), e = this.norm(expected);
+      if (a === e) return true;
+      const base = Lexicon.stem(e);
+      if (base !== e) {
+        // inflected expected: same-stem inflections only
+        const roots = [base];
+        if (base.length > 3 && base.endsWith(base[base.length - 1] + base[base.length - 1])) {
+          roots.push(base.slice(0, -1));
+        }
+        const TAILS = ["", "s", "es", "ed", "d", "ing", "ies", "y"];
+        for (const r of roots) {
+          if (a === r) return true;
+          if (a.startsWith(r) && a.length - r.length <= 3 && TAILS.includes(a.slice(r.length))) return true;
+        }
+        return false;
+      }
+      // bare expected: exact inflection rules
+      const last = e.slice(-1);
+      const penult = e.slice(-2, -1);
+      if (last === "y" && penult && !"aeiou".includes(penult)) {
+        return a === e.slice(0, -1) + "ies" || a === e.slice(0, -1) + "ied" || a === e + "ing";
+      }
+      if ("sxz".includes(last) || e.endsWith("ch") || e.endsWith("sh")) {
+        return a === e + "es" || a === e + "ed";
+      }
+      // -o endings pluralise with -es (go → goes); gos ✗, but
+      // -ing/-ed stay regular (going/echoed)
+      if (last === "o") {
+        return a === e + "es" || a === e + "ing" || a === e + "ed";
+      }
+      // closed syllable (short word only): -ing/-ed must double the
+      // consonant; y never doubles (buying); happen never doubles
+      if (last !== "y" && e.length <= 4 && penult && "aeiou".includes(penult) &&
+          !"aeiou".includes(last) && last !== "e") {
+        return a === e + last + "ing" || a === e + last + "ed" || a === e + "s";
+      }
+      // -el endings may double in BrE (travelling/travelled)
+      if (e.endsWith("el") && penult && "aeiou".includes(penult)) {
+        if (a === e + "ling" || a === e + "led") return true;
+      }
+      if (a.startsWith(e) && a.length - e.length <= 3) {
+        const tail = a.slice(e.length);
+        if (tail === "d") return last === "e";
+        return ["s", "es", "ed", "ing", "y"].includes(tail);
+      }
+      return false;
     },
 
     gapNext() {
