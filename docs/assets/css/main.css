@@ -997,6 +997,7 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 }
 .word-phone { color: var(--cyan); font-family: monospace; }
 .word-root { color: var(--amber); }
+.word-note { color: var(--fg-dim); font-style: italic; }
 
 /* ---- recognition (看词选义) ---- */
 .recognize-word {

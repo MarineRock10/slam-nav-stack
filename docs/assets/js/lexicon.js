@@ -206,6 +206,10 @@
         }
       };
       const g = global;
+      // the 100-sentence deck first — real IELTS-style sentences
+      // with Chinese glosses, they anchor the scene bank
+      const i100 = g.IELTS_100 || {};
+      for (const row of i100.lessons || []) addSentence(row[0]);
       // English definition/example sentences (4000 EEW etc.)
       const defs = g.IELTS_DEFS || {};
       for (const k in defs) {
@@ -369,6 +373,12 @@
         }
       }
       return { roots: roots, family: family };
+    },
+
+    /* per-word note from the 100-sentence deck: [中文义, 搭配, 构词联想] */
+    noteOf(key) {
+      const notes = (global.IELTS_100 || {}).notes || {};
+      return notes[String(key).toLowerCase()] || null;
     },
 
     /* up to `limit` real sentences containing the word (any inflection).

@@ -752,6 +752,11 @@
       } else if (fam.family.length) {
         html += '<span class="word-root">同族: ' + this.esc(fam.family.slice(0, 3).join(", ")) + "</span>";
       }
+      // 100-sentence deck note: [中文义, 搭配, 构词联想]
+      const note = Lexicon.noteOf(item.key);
+      if (note && note[2]) {
+        html += '<span class="word-note">' + this.esc(note[2]) + "</span>";
+      }
       html += "</div>";
       return html;
     },
