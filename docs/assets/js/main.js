@@ -1217,8 +1217,11 @@
         const rate = (sc.spell || 0) + (sc.gapOk || 0);
         const pct = Math.round((rate / total) * 100);
         sum += pct;
-        const label = pct >= 90 ? "EASY" : pct >= 70 ? "GOOD" : pct >= 50 ? "HARD" : "AGAIN";
-        const cls = pct >= 70 ? "ok" : pct >= 50 ? "warn" : "err";
+        // grade shown must match the applied q: a failed recognition
+        // caps the grade at HARD even when typing was perfect
+        const effPct = sc.recOk === 0 ? Math.min(pct, 69) : pct;
+        const label = effPct >= 90 ? "EASY" : effPct >= 70 ? "GOOD" : effPct >= 50 ? "HARD" : "AGAIN";
+        const cls = effPct >= 70 ? "ok" : effPct >= 50 ? "warn" : "err";
         rows += '<div class="gr-row"><span class="gr-word">' + this.esc(item.ent.w) + "</span>" +
           '<div class="statbar"><div class="statbar-fill" style="width:' + pct + '%"></div></div>' +
           '<span class="gr-rate ' + cls + '">' + pct + "% · " + label + (sc.recOk === 0 ? " · REC ✗" : "") + "</span></div>";

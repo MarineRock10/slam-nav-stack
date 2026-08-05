@@ -64,8 +64,8 @@
       if (q === 3) { // EASY: extra boost
         c.ef += 0.15;
         if (c.reps > 1) c.ivl = Math.round(c.ivl * 1.3);
-      } else { // GOOD
-        c.ef = c.ef + (0.1 - (5 - 4) * (0.08 + (5 - 4) * 0.02)); // standard q=4 step
+      } else { // GOOD — standard SM-2 q=4: ease factor unchanged
+        // (q=4 in SM-2's 0..5 scale is the neutral step)
       }
       c.ef = Math.max(1.3, Math.min(3.2, c.ef));
       c.ivl = Math.max(1, c.ivl);
@@ -83,11 +83,13 @@
     },
 
     /* ---- memory-curve stage mapping (interval driven) ----
-     * new(0d) -> learning(<3d) -> consolidating(3-21d) -> mastered(>21d) */
+     * new(0d) -> learning(<3d) -> consolidating(3-21d) -> mastered(>=21d),
+     * boundary aligned with lvl (mature at ivl >= 21) so deck
+     * distribution and curve stats never disagree by a day */
     stage(card) {
       if (!card || !card.ivl) return "new";
       if (card.ivl < 3) return "learning";
-      if (card.ivl <= 21) return "consolidating";
+      if (card.ivl < 21) return "consolidating";
       return "mastered";
     },
     STAGES: ["new", "learning", "consolidating", "mastered"]
