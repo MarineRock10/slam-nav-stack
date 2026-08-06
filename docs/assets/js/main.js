@@ -1471,6 +1471,16 @@
       const unf = Lexicon.unfamiliarList();
       const now = Date.now();
       const rows = [];
+      // hot-zone words first — including flagged words with no card
+      // yet (flagged in practice), so they are always visible and
+      // manageable from the deck
+      for (const key in unf) {
+        if (cards[key]) continue; // handled below with its card
+        // no card -> stage "new": only reachable via ALL or HOT ZONE
+        if (this._deckFilter !== "all" && this._deckFilter !== "hot") continue;
+        const ent = Lexicon.get(key) || { w: key, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+        rows.push({ key, ent, card: null, stage: "new", hot: true, src: unf[key].src });
+      }
       for (const key in cards) {
         const card = cards[key];
         const stage = SRS.stage(card);
@@ -1481,15 +1491,20 @@
         const ent = Lexicon.get(key) || { w: key, t: "" };
         rows.push({ key, ent, card, stage, hot: !!unf[key], src: unf[key] ? unf[key].src : null });
       }
-      // hot zone first, then by stage / due
+      // hot zone first, then by due
       rows.sort((a, b) => {
         if (a.hot !== b.hot) return a.hot ? -1 : 1;
-        return (a.card.due || 0) - (b.card.due || 0);
+        return ((a.card && a.card.due) || 0) - ((b.card && b.card.due) || 0);
       });
 
       $("dkCount").textContent = rows.length + " WORDS";
+      // summary is the whole-deck distribution, independent of the
+      // active filter (HOT ZONE already counts the full collection)
       const stageCount = { learning: 0, consolidating: 0, mastered: 0 };
-      for (const r of rows) stageCount[r.stage]++;
+      for (const key in cards) {
+        const st = SRS.stage(cards[key]);
+        if (stageCount[st] !== undefined) stageCount[st]++;
+      }
       $("dkSummary").innerHTML =
         "<span>HOT ZONE <b>" + Object.keys(unf).length + "</b></span>" +
         "<span>LEARNING <b>" + stageCount.learning + "</b></span>" +
@@ -1501,7 +1516,7 @@
       if (this._deckPage >= pages) this._deckPage = pages - 1;
       const slice = rows.slice(this._deckPage * PER, (this._deckPage + 1) * PER);
       const dueLabel = (card) => {
-        if (!card.due) return "NEW";
+        if (!card || !card.due) return "NEW";
         const d = card.due - now;
         if (d <= 0) return "DUE NOW";
         const h = Math.round(d / 3600000);
@@ -1545,7 +1560,9 @@
       const card = Lexicon.getCard(key) || SRS.fresh();
       const due = Lexicon.dueCards().filter((d) => d.key !== key);
       const queue = due.map((d) => ({ key: d.key, ent: Lexicon.get(d.key), card: d.card, isNew: false, hot: Lexicon.isUnfamiliar(d.key) }));
-      queue.unshift({ key, ent, card, isNew: false, hot: Lexicon.isUnfamiliar(key) });
+      // a flagged word without a card yet (practice-flagged) is still
+      // new — it must walk the full MEANING -> RECOGNIZE -> SPELL chain
+      queue.unshift({ key, ent, card, isNew: !card, hot: Lexicon.isUnfamiliar(key) });
       const groups = this.buildGroups(queue, true);
       this.session = {
         queue, groups, gi: 0, wi: 0,
