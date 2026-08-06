@@ -174,6 +174,15 @@
       <div id="vocabLexicon" class="sub-view">
         <div class="panel">
           <div class="panel-title"><span class="pt-dot"></span>LEXICON INDEX <span class="pt-tag" id="lgCount">0 ENTRIES</span></div>
+          <div class="manual-add">
+            <input type="text" id="lgAddWord" class="input" placeholder="NEW WORD... (e.g. 'serendipity')" autocomplete="off">
+            <input type="text" id="lgAddTrans" class="input" placeholder="中文释义（建议填写）" autocomplete="off">
+            <button class="btn btn-primary" id="btnAddWord">＋ ADD WORD</button>
+            <div class="manual-add-more">
+              <input type="text" id="lgAddPhone" class="input" placeholder="音标（可选）" autocomplete="off">
+              <input type="text" id="lgAddExample" class="input" placeholder="英文例句（可选）" autocomplete="off">
+            </div>
+          </div>
           <div class="log-controls">
             <input type="text" id="lgSearch" class="input" placeholder="SEARCH LEXICON... (e.g. 'abandon')" autocomplete="off">
             <button class="btn" id="btnImport">⇪ IMPORT</button>
@@ -245,15 +254,14 @@
     </div>
   </div>
 
-  <!-- ==================== UNKNOWN WORD PANEL ==================== -->
+  <!-- ==================== MANUAL ADD RESULT PANEL ==================== -->
   <div class="modal-backdrop" id="unkModal" hidden>
     <div class="modal">
-      <div class="panel-title"><span class="pt-dot"></span>UNKNOWN LEXEME <span class="pt-tag" id="unkTag">FLAG</span></div>
+      <div class="panel-title"><span class="pt-dot"></span>LEXICON OPERATION <span class="pt-tag" id="unkTag">ADD</span></div>
       <div class="unk-word-big" id="unkWord">--</div>
       <div class="unk-phonetic" id="unkPhonetic"></div>
       <div class="unk-def" id="unkDef"></div>
       <div class="modal-actions">
-        <button class="btn btn-primary" id="btnUnkAdd">⇪ ADD TO MEMORY DECK</button>
         <button class="btn" id="btnUnkClose">CLOSE</button>
       </div>
     </div>
@@ -265,24 +273,24 @@
   </footer>
 </div>
 
-<script src="assets/js/words/core-vocab.js?v=8"></script>
-<script src="assets/js/words/core-zh.js?v=8"></script>
-<script src="assets/js/words/phonetic-fill.js?v=8"></script>
-<script src="assets/js/words/defs-4000eew.js?v=8"></script>
-<script src="assets/js/words/defs-gen-1.js?v=8"></script>
-<script src="assets/js/words/defs-gen-2.js?v=8"></script>
-<script src="assets/js/words/defs-gen-3.js?v=8"></script>
-<script src="assets/js/words/defs-gen-4.js?v=8"></script>
-<script src="assets/js/words/defs-gen-5.js?v=8"></script>
-<script src="assets/js/words/sentence-zh-1.js?v=8"></script>
-<script src="assets/js/words/ielts100.js?v=8"></script>
-<script src="assets/js/words/ielts-data.js?v=8"></script>
-<script src="assets/js/words/theme-map.js?v=8"></script>
-<script src="assets/js/words/roots.js?v=8"></script>
-<script src="assets/js/srs.js?v=8"></script>
-<script src="assets/js/lexicon.js?v=8"></script>
-<script src="assets/js/telemetry.js?v=8"></script>
-<script src="assets/js/cloud.js?v=8"></script>
-<script src="assets/js/main.js?v=8"></script>
+<script src="assets/js/words/core-vocab.js?v=9"></script>
+<script src="assets/js/words/core-zh.js?v=9"></script>
+<script src="assets/js/words/phonetic-fill.js?v=9"></script>
+<script src="assets/js/words/defs-4000eew.js?v=9"></script>
+<script src="assets/js/words/defs-gen-1.js?v=9"></script>
+<script src="assets/js/words/defs-gen-2.js?v=9"></script>
+<script src="assets/js/words/defs-gen-3.js?v=9"></script>
+<script src="assets/js/words/defs-gen-4.js?v=9"></script>
+<script src="assets/js/words/defs-gen-5.js?v=9"></script>
+<script src="assets/js/words/sentence-zh-1.js?v=9"></script>
+<script src="assets/js/words/ielts100.js?v=9"></script>
+<script src="assets/js/words/ielts-data.js?v=9"></script>
+<script src="assets/js/words/theme-map.js?v=9"></script>
+<script src="assets/js/words/roots.js?v=9"></script>
+<script src="assets/js/srs.js?v=9"></script>
+<script src="assets/js/lexicon.js?v=9"></script>
+<script src="assets/js/telemetry.js?v=9"></script>
+<script src="assets/js/cloud.js?v=9"></script>
+<script src="assets/js/main.js?v=9"></script>
 </body>
 </html>

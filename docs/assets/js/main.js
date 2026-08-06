@@ -617,7 +617,12 @@
         $("mcProgress").style.width = ((pos - 1) / totalWords) * 100 + "%";
       }
       if (s.phase === "meaning") this.renderMeaning();
-      else if (s.phase === "recognize") this.renderRecognize(item);
+      else if (s.phase === "recognize") {
+        // a word with no gloss at all (no Chinese, no EN def) cannot
+        // form a recognition choice — go straight to spelling
+        if (!this.zhHead(item.key)) { s.phase = "spell"; this.renderSpell(item); }
+        else this.renderRecognize(item);
+      }
       else if (s.phase === "spell") this.renderSpell(item);
       else if (s.phase === "gap") this.renderGap(item);
       else if (s.phase === "result") this.renderGroupResult();
@@ -1597,12 +1602,24 @@
       const page = this._logPage;
       const slice = rows.slice(page * PER, (page + 1) * PER);
 
+      const customSet = new Set(Object.keys(Lexicon.getCustom()));
       $("lgList").innerHTML = slice.map((r) =>
         '<div class="log-row">' +
-        '<span class="log-word">' + this.esc(r.ent.w) + "</span>" +
+        '<span class="log-word">' + this.esc(r.ent.w) + (customSet.has(r.key) ?
+          ' <span class="log-custom">CUSTOM</span>' : "") + "</span>" +
         '<span class="log-trans">' + this.esc(Lexicon._cleanGloss ? Lexicon._cleanGloss(r.ent.t) : r.ent.t) + "</span>" +
-        '<span class="log-state"><span class="' + r.cls + '">' + r.state + "</span></span>" +
+        '<span class="log-state"><span class="' + r.cls + '">' + r.state + "</span>" +
+        (customSet.has(r.key) ? '<button class="btn log-del" title="REMOVE CUSTOM WORD" data-del="' + this.esc(r.key) + '">✕</button>' : "") +
+        "</span>" +
         "</div>").join("") || '<div class="log-row"><span class="log-word">NO MATCHES</span></div>';
+      $("lgList").querySelectorAll("[data-del]").forEach((b) =>
+        b.addEventListener("click", () => {
+          if (confirm("REMOVE CUSTOM WORD: " + b.dataset.del + "?")) {
+            Lexicon.removeCustom(b.dataset.del);
+            this.renderLog();
+            this.renderAll();
+          }
+        }));
 
       $("lgPager").innerHTML =
         '<button class="btn" id="pgPrev">◂ PREV</button>' +
@@ -1769,6 +1786,39 @@
         this._logPage = 0;
         this.renderLog();
       });
+      // ---- MANUAL ADD: 查重后写入 custom，弹窗反馈 ----
+      const addWord = () => {
+        const word = $("lgAddWord").value.trim();
+        if (!word) { $("lgAddWord").focus(); return; }
+        const res = Lexicon.addCustom(
+          word,
+          $("lgAddTrans").value.trim(),
+          $("lgAddPhone").value.trim(),
+          "",
+          $("lgAddExample").value.trim()
+        );
+        if (res.status === "added") {
+          $("unkTag").textContent = "ADDED";
+          $("unkWord").textContent = word;
+          $("unkPhonetic").textContent = $("lgAddPhone").value.trim() ? "US/UK " + $("lgAddPhone").value.trim() : "PRIORITY: CORE — ENTERS THE DAILY QUEUE";
+          $("unkDef").textContent = $("lgAddTrans").value.trim() || "已加入词库（p=0 最高优先），主题/词根自动打标。";
+          $("lgAddWord").value = ""; $("lgAddTrans").value = ""; $("lgAddPhone").value = ""; $("lgAddExample").value = "";
+        } else {
+          $("unkTag").textContent = res.status === "variant" ? "VARIANT" : "EXISTS";
+          $("unkWord").textContent = res.word || word;
+          $("unkPhonetic").textContent = res.status === "variant"
+            ? "词库已有同源词 — 你输入的是它的变形形式"
+            : "ALREADY IN LEXICON — NO DUPLICATE ADDED";
+          $("unkDef").textContent = "不需要重复添加，直接搜索并学习该词即可。";
+        }
+        $("unkModal").hidden = false;
+        this.renderLog();
+        this.renderAll();
+      };
+      $("btnAddWord").addEventListener("click", addWord);
+      $("lgAddWord").addEventListener("keydown", (e) => { if (e.key === "Enter") addWord(); });
+      $("btnUnkClose").addEventListener("click", () => { $("unkModal").hidden = true; });
+      $("unkModal").addEventListener("click", (e) => { if (e.target === $("unkModal")) $("unkModal").hidden = true; });
       $("btnImport").addEventListener("click", () => $("fileImport").click());
       $("fileImport").addEventListener("change", (e) => {
         if (e.target.files && e.target.files[0]) this.doImport(e.target.files[0]);

@@ -128,10 +128,15 @@
       for (const k in custom) {
         const key = k.toLowerCase();
         const c = custom[k];
-        const ent = _lexicon.get(key) || { w: k, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+        const existed = _lexicon.has(key);
+        const ent = _lexicon.get(key) || { w: k, t: "", us: "", uk: "", p: 0, d: "", e: "" };
+        // manually added words are studied first (p=0); words that
+        // already exist in the source keep their tier
+        if (!existed) ent.p = 0;
         if (c[0]) ent.t = c[0];
         if (c[1]) ent.us = c[1];
         if (c[2]) ent.uk = c[2];
+        if (c[3]) ent.e = c[3];   // optional example sentence
         _lexicon.set(key, ent);
       }
       return _lexicon;
@@ -141,8 +146,10 @@
 
     get(word) { return this.load().get(String(word).toLowerCase()) || null; },
 
-    /* rebuild the merged lexicon map after external data changes (cloud sync) */
-    refresh() { _lexicon = null; return this.load(); },
+    /* rebuild the merged lexicon map after external data changes
+     * (cloud sync, manual adds) — the theme cache must die too or
+     * freshly added words would never leave the GENERAL pool */
+    refresh() { _lexicon = null; this._themeCache = null; return this.load(); },
 
     /* ---- card state ---- */
     cards() {
@@ -462,6 +469,52 @@
     },
     saveCustom() { writeLS(LS_CUSTOM, this.getCustom()); },
 
+    /* ---- manual word add (查重后写入) ----
+     * returns:
+     *   { status: "exists", word }  — already in the lexicon
+     *   { status: "variant", word } — same stem as an existing word
+     *                                (bananas → banana)
+     *   { status: "added" }         — stored, ready to study
+     */
+    addCustom(key, trans, us, uk, example) {
+      const k = String(key || "").trim().toLowerCase();
+      if (!k) return { status: "exists", word: "" };
+      const norm = (w) => w.toLowerCase().replace(/[- ]+/g, "");
+      // exact match
+      if (this.load().has(k)) return { status: "exists", word: k };
+      // normalized match (bird-watching ≈ bird watching)
+      const nk = norm(k);
+      for (const w of this.load().keys()) {
+        if (norm(w) === nk) return { status: "exists", word: w };
+      }
+      // stem variant (bananas ↔ banana, either direction)
+      const stem = this.stem(k);
+      if (stem.length >= 3) {
+        for (const w of this.load().keys()) {
+          if (this.stem(w) === stem) return { status: "variant", word: w };
+        }
+      }
+      // custom-internal duplicate
+      if (this.getCustom()[k]) return { status: "exists", word: k };
+      const custom = this.getCustom();
+      custom[k] = [trans || "", us || "", uk || "", example || ""];
+      this.saveCustom();
+      this.refresh();
+      return { status: "added" };
+    },
+
+    /* remove a manually added word; a word that merely overrode a
+     * source entry falls back to its source data */
+    removeCustom(key) {
+      const k = String(key || "").toLowerCase();
+      const custom = this.getCustom();
+      if (!custom[k]) return false;
+      delete custom[k];
+      this.saveCustom();
+      this.refresh();
+      return true;
+    },
+
     /* ---- sense decomposition ----
      * Splits a word's translation into structured senses so the
      * learner studies meaning in context rather than rote lists.
@@ -607,9 +660,19 @@
       }
       const need = Math.max(0, limit - todayAdded - (reserved || 0));
       if (need === 0) return out;
-      // iterate priority tiers: core(0) -> extended(1) -> supplement(2)
+      // iterate priority tiers: core(0) -> extended(1) -> supplement(2);
+      // manually added words lead their tier (主动添加 = 主动想学)
       const seen = {};
+      const custom = this.getCustom();
       for (let tier = 0; tier <= 2; tier++) {
+        for (const key in custom) {
+          const ent = this.load().get(key);
+          if (!ent || ent.p !== tier) continue;
+          if (cards[key] || seen[key]) continue;
+          seen[key] = true;
+          out.push({ key, ent });
+          if (out.length >= need) return out;
+        }
         for (const [key, ent] of this.load()) {
           if (ent.p !== tier) continue;
           if (cards[key]) continue;

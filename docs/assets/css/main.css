@@ -1242,3 +1242,35 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   75% { transform: translateX(5px); }
 }
 .shake { animation: shake 0.3s ease; }
+
+/* ---- manual add form ---- */
+.manual-add {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px dashed var(--border-bright);
+  border-radius: var(--r-sm);
+}
+.manual-add .input { flex: 1 1 160px; }
+.manual-add #lgAddWord { flex: 1 1 180px; }
+.manual-add #btnAddWord { flex: 0 0 auto; }
+.manual-add-more { display: flex; flex: 1 1 100%; gap: var(--sp-2); }
+.manual-add-more .input { flex: 1 1 140px; }
+.log-custom {
+  display: inline-block;
+  margin-left: var(--sp-1);
+  padding: 0 var(--sp-1);
+  border: 1px solid var(--cyan-dim, var(--border-bright));
+  color: var(--cyan);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  vertical-align: 1px;
+}
+.log-del {
+  margin-left: var(--sp-2);
+  padding: 0 var(--sp-1);
+  font-size: var(--fs-tiny);
+  color: var(--red);
+  border-color: var(--border-bright);
+}
+.log-del:hover { border-color: var(--red); }
