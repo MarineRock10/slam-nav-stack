@@ -379,18 +379,23 @@
     buildQueue(reviewOnly) {
       const st = Lexicon.state();
       const queue = [];
-      // 1) due reviews — hot zone (flagged) first, then by due time
+      // 1) hot-zone words first — every flagged word enters the
+      //    daily queue (studied or not), so weak words always get a
+      //    chance to clear automatically (a GOOD/EASY answer
+      //    removes the flag; wrong answers keep it for tomorrow)
+      for (const key in Lexicon.getUnfamiliar()) {
+        const ent = Lexicon.get(key) || { w: key, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+        const card = Lexicon.getCard(key);
+        queue.push({ key, ent, card, isNew: !card, hot: true });
+      }
+      // 2) due reviews, then by due time
       const due = Lexicon.dueCards();
-      due.sort((a, b) => {
-        const au = Lexicon.isUnfamiliar(a.key) ? 0 : 1;
-        const bu = Lexicon.isUnfamiliar(b.key) ? 0 : 1;
-        return (au - bu) || (a.card.due - b.card.due);
+      due.sort((a, b) => a.card.due - b.card.due);
+      due.forEach((d) => {
+        if (queue.some((t) => t.key === d.key)) return;
+        queue.push({ key: d.key, ent: Lexicon.get(d.key), card: d.card, isNew: false, hot: false });
       });
-      due.forEach((d) => queue.push({ key: d.key, ent: Lexicon.get(d.key), card: d.card, isNew: false, hot: Lexicon.isUnfamiliar(d.key) }));
       if (reviewOnly) return queue;
-      // 2) flagged words never studied yet — priority new items
-      const fresh = Lexicon.unfamiliarFresh();
-      fresh.forEach((n) => queue.push({ key: n.key, ent: n.ent, card: null, isNew: true, hot: true }));
       // 3) regular new words are chosen BY buildGroups from the
       //    sentence bank (句表), capped by the DDL-derived goal
       return queue;
@@ -1267,6 +1272,12 @@
       const updated = SRS.review(card, q);
       if (updated.weak >= 2 && !Lexicon.isUnfamiliar(item.key)) {
         Lexicon.addUnfamiliar(item.key, "weak");
+      }
+      // auto-clear: a hot-zone word answered well leaves the zone —
+      // no manual UNFLAG needed; if it is still weak it stays and
+      // re-enters tomorrow's queue
+      if (q >= 2 && Lexicon.isUnfamiliar(item.key)) {
+        Lexicon.removeUnfamiliar(item.key);
       }
       Lexicon.setCard(item.key, updated);
       if (q === 0) s.failed++;
