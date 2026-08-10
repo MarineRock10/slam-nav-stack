@@ -409,6 +409,8 @@
         // review-only queues skip the scene-listening stage — the
         // first card starts at recognition (identification first)
         phase: (groups[0] && groups[0].words[0].isNew) ? "meaning" : "recognize",
+        spellOrder: null,   // shuffled spell-channel order, set on enterSpell()
+        gapWord: null,      // group index of the word being gap-filled
         scores: {}, newDone: 0, revDone: 0, failed: 0,
         _logged: { n: 0, r: 0 },   // stats already banked via partialLog()
         startedAt: new Date().toISOString()
@@ -585,9 +587,15 @@
       return groups;
     },
 
+    /* current word depends on the channel:
+     *  meaning/recognize -> group order; spell -> shuffled order;
+     *  gap -> the word whose sentences are being filled */
     curWord() {
       const s = this.session;
-      return s.groups[s.gi].words[s.wi];
+      const group = s.groups[s.gi];
+      if (s.phase === "spell") return group.words[s.spellOrder[s.wi]];
+      if (s.phase === "gap") return group.words[s.gapWord];
+      return group.words[s.wi];
     },
 
     renderCard() {
@@ -609,23 +617,45 @@
       const isResult = s.phase === "result";
       const item = isResult ? null : this.curWord();
       if (item) {
-        const totalWords = s.groups.reduce((n, g) => n + g.words.length, 0);
-        const pos = s.groups.slice(0, s.gi).reduce((n, g) => n + g.words.length, 0) + s.wi + 1;
+        const group = s.groups[s.gi];
+        const chan = s.phase === "meaning" ? "SCENE" :
+          s.phase === "recognize" ? "RECOGNIZE" :
+          s.phase === "spell" ? "SPELL" : "FILL";
+        const denom = s.phase === "gap" ? (this._gaps ? this._gaps.length : 1) : group.words.length;
         $("mcMode").textContent = (item.hot ? "HOT ZONE: " : "") + (item.isNew ? "NEW WORD" : "REVIEW");
         $("mcMeta").textContent = "SCENE " + (s.gi + 1) + "/" + s.groups.length +
-          " · WORD " + pos + "/" + totalWords + (item.hot ? " · 🔥 FLAGGED" : "");
-        $("mcProgress").style.width = ((pos - 1) / totalWords) * 100 + "%";
+          " · " + chan + " " + (s.wi + 1) + "/" + denom + (item.hot ? " · 🔥 FLAGGED" : "");
+        const totalWords = s.groups.reduce((n, g) => n + g.words.length, 0);
+        const done = s.groups.slice(0, s.gi).reduce((n, g) => n + g.words.length, 0) + s.wi;
+        $("mcProgress").style.width = (totalWords ? (done / totalWords) * 100 : 0) + "%";
       }
       if (s.phase === "meaning") this.renderMeaning();
       else if (s.phase === "recognize") {
         // a word with no gloss at all (no Chinese, no EN def) cannot
-        // form a recognition choice — go straight to spelling
-        if (!this.zhHead(item.key)) { s.phase = "spell"; this.renderSpell(item); }
-        else this.renderRecognize(item);
+        // form a recognition choice — auto-pass recognition and move
+        // to the next word of the channel (it will still be spelled)
+        if (!this.zhHead(item.key)) {
+          s.scores[item.key] = Object.assign({ recOk: 1 }, s.scores[item.key]);
+          s.wi++;
+          if (s.wi >= s.groups[s.gi].words.length) this.enterSpell();
+          this.renderPhase();
+          return;
+        }
+        this.renderRecognize(item);
       }
       else if (s.phase === "spell") this.renderSpell(item);
       else if (s.phase === "gap") this.renderGap(item);
       else if (s.phase === "result") this.renderGroupResult();
+    },
+
+    /* recognition channel done -> spelling channel, shuffled so the
+     * word just recognized is never the very next word spelled */
+    enterSpell() {
+      const s = this.session;
+      const group = s.groups[s.gi];
+      s.spellOrder = this._shuffled(group.words.map((_, i) => i));
+      s.phase = "spell";
+      s.wi = 0;
     },
 
     /* Chinese translation line for a scene sentence, when available */
@@ -634,13 +664,30 @@
       return zh ? '<div class="scene-zh">' + this.esc(zh) + "</div>" : "";
     },
 
-    /* ---- navigation: previous / next across stages ---- */
+    /* ---- navigation: previous / next across channels ---- */
     goBack() {
       const s = this.session;
       if (!s) return;
-      if (s.phase === "gap") { s.phase = "spell"; this.renderPhase(); return; }
-      if (s.phase === "spell") { s.phase = "recognize"; this.renderPhase(); return; }
-      if (s.phase === "recognize") { s.phase = "meaning"; this.renderPhase(); return; }
+      // inside a channel: step back one word
+      if (s.phase === "gap") {
+        if (this._gapIdx > 0) { this._gapIdx--; this.renderGap(this.curWord()); return; }
+        s.phase = "spell"; // back to the spelling card of this word
+        this.renderPhase();
+        return;
+      }
+      if (s.phase === "spell") {
+        if (s.wi > 0) { s.wi--; this.renderPhase(); return; }
+        s.phase = "recognize";
+        s.wi = s.groups[s.gi].words.length - 1;
+        this.renderPhase();
+        return;
+      }
+      if (s.phase === "recognize") {
+        if (s.wi > 0) { s.wi--; this.renderPhase(); return; }
+        s.phase = "meaning";
+        this.renderPhase();
+        return;
+      }
       // meaning / result -> previous group's result
       if (s.gi > 0) {
         s.gi--;
@@ -653,12 +700,17 @@
     goNext() {
       const s = this.session;
       if (!s) return;
-      if (s.phase === "meaning") { s.phase = "recognize"; this.renderPhase(); return; }
-      if (s.phase === "recognize") { s.phase = "spell"; this.renderPhase(); return; }
+      if (s.phase === "meaning") { s.phase = "recognize"; s.wi = 0; this.renderPhase(); return; }
+      if (s.phase === "recognize") {
+        s.wi++;
+        if (s.wi >= s.groups[s.gi].words.length) this.enterSpell();
+        this.renderPhase();
+        return;
+      }
       if (s.phase === "spell") {
-        // new words get a gap-fill pass; reviews are done after spelling
-        if (this.curWord().isNew) this.advanceToGap();
-        else this.finishWord();
+        const item = this.curWord();
+        if (item.isNew) { this.advanceToGap(); return; }
+        this.finishWord();
         return;
       }
       if (s.phase === "gap") { this.gapNext(); return; }
@@ -870,7 +922,7 @@
       $("cardStage").innerHTML =
         '<div class="card sense-card">' +
         '<span class="card-wp">SCENE ' + (s.gi + 1) + "/" + s.groups.length +
-        " · WORD " + (s.wi + 1) + "/" + group.words.length + "</span>" +
+        " · RECOGNIZE " + (s.wi + 1) + "/" + group.words.length + "</span>" +
         '<span class="card-status learn">RECOGNITION</span>' +
         '<div class="sense-label">' + (item.isNew ? "STAGE 2 · PICK THE MEANING" : "STAGE 1 · PICK THE MEANING") + "</div>" +
         '<div class="recognize-word">' + this.esc(ent.w) + "</div>" +
@@ -882,8 +934,9 @@
         '<div class="typing-feedback" id="recFeedback"></div>' +
         '<div class="step-bar nav-bar" id="recNav" style="display:none">' +
         '<button class="btn" id="btnBack2">◀ BACK</button>' +
-        '<button class="btn btn-primary" id="btnRecNext">CONTINUE TO SPELL ▸</button></div>' +
-        '<div class="card-index">KEYS 1-4 TO PICK · CORRECT MEANING BEFORE SPELLING</div>' +
+        '<button class="btn btn-primary" id="btnRecNext">' +
+        (s.wi + 1 >= group.words.length ? "FINISH RECOGNITION ▸" : "NEXT WORD ▸") + "</button></div>" +
+        '<div class="card-index">KEYS 1-4 TO PICK · ALL WORDS RECOGNIZED FIRST, THEN SPELLING</div>' +
         "</div>";
 
       const fb = $("recFeedback");
@@ -942,7 +995,7 @@
       $("cardStage").innerHTML =
         '<div class="card sense-card typing-card">' +
         '<span class="card-wp">SCENE ' + (s.gi + 1) + "/" + s.groups.length +
-        " · WORD " + (s.wi + 1) + "/" + group.words.length + "</span>" +
+        " · SPELL " + (s.wi + 1) + "/" + group.words.length + "</span>" +
         '<span class="card-status learn">WORD SPELLING</span>' +
         '<div class="sense-label">STAGE 2 · HEAR THE WORD — SPELL WITH HINTS</div>' +
         '<div class="sense-list">' + (this.senseListHtml(senses, showTrans, ent.w) ||
@@ -1024,6 +1077,9 @@
         this.finishWord();
         return;
       }
+      // remember which word the gap channel belongs to (the spell
+      // channel walks a shuffled order) and jump to its fill cards
+      s.gapWord = s.spellOrder[s.wi];
       this._gaps = sents;
       this._gapIdx = 0;
       s.phase = "gap";
@@ -1047,7 +1103,7 @@
       $("cardStage").innerHTML =
         '<div class="card sense-card typing-card">' +
         '<span class="card-wp">SCENE ' + (s.gi + 1) + "/" + s.groups.length +
-        " · WORD " + (s.wi + 1) + "/" + group.words.length + "</span>" +
+        " · FILL " + (this._gapIdx + 1) + "/" + this._gaps.length + "</span>" +
         '<span class="card-status learn">SCENE SPELLING</span>' +
         '<div class="sense-label">STAGE 3 · LISTEN TO THE SCENE — SPELL IT IN CONTEXT (' + (this._gapIdx + 1) + "/" + this._gaps.length + ")</div>" +
         '<div class="card-example big">“' + blanked + '”</div>' +
@@ -1174,10 +1230,14 @@
     gapNext() {
       const s = this.session;
       if (!s || s.phase !== "gap") return;
-      const item = this.curWord();
       this._gapIdx++;
-      if (this._gapIdx >= this._gaps.length) this.finishWord();
-      else this.renderGap(item);
+      if (this._gapIdx >= this._gaps.length) {
+        // word finished all its fill cards — settle it, then continue
+        // the spelling channel with the next shuffled word
+        this.finishWord();
+      } else {
+        this.renderGap(this.curWord());
+      }
     },
 
     blankWord(sentence, word) {
@@ -1203,15 +1263,14 @@
       // recognition failure caps the grade — identification before recall
       if (sc.recOk === 0 && q > 1) q = 1;
       this.applyGrade(item, q);
+      // word done — resume the spelling channel with the next word
+      // (gap channel returns to the shuffled spell order)
+      if (s.phase === "gap") s.phase = "spell";
       s.wi++;
       if (s.wi >= s.groups[s.gi].words.length) {
         s.phase = "result";
         this.renderPhase();
       } else {
-        // new words re-enter at recognition; reviews jump straight
-        // to spelling (the scene was already covered)
-        const next = s.groups[s.gi].words[s.wi];
-        s.phase = next.isNew ? "recognize" : "spell";
         this.renderPhase();
       }
     },
@@ -1567,6 +1626,7 @@
       this.session = {
         queue, groups, gi: 0, wi: 0,
         phase: (groups[0] && groups[0].words[0].isNew) ? "meaning" : "recognize",
+        spellOrder: null, gapWord: null,
         scores: {}, newDone: 0, revDone: 0, failed: 0,
         _logged: { n: 0, r: 0 },
         startedAt: new Date().toISOString()
