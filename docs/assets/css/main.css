@@ -506,6 +506,7 @@ html, body {
 .done-symbol { font-size: 48px; color: var(--accent); text-shadow: var(--glow); }
 .done-title { font-size: var(--fs-2xl); font-weight: 700; color: var(--fg-bright); margin: var(--sp-3) 0 var(--sp-2); letter-spacing: 0.12em; }
 .done-sub { color: var(--fg-dim); margin-bottom: var(--sp-5); }
+.done-actions { display: flex; gap: var(--sp-2); justify-content: center; }
 
 /* ---------------- sensor log ---------------- */
 .log-controls { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-3); }

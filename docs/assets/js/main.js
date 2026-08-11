@@ -401,9 +401,9 @@
       return queue;
     },
 
-    startSession(reviewOnly) {
+    startSession(reviewOnly, extra) {
       const queue = this.buildQueue(reviewOnly);
-      const groups = this.buildGroups(queue, reviewOnly);
+      const groups = this.buildGroups(queue, reviewOnly, 4, extra);
       this.session = {
         queue, groups, gi: 0, wi: 0,
         // review-only queues skip the scene-listening stage — the
@@ -485,7 +485,7 @@
       if (card.due <= Date.now()) return 7;
       return 1;
     },
-    buildGroups(queue, reviewOnly, size = 4) {
+    buildGroups(queue, reviewOnly, size = 4, extra = false) {
       const bank = Lexicon.buildSentenceBank();
       const targetMap = new Map(queue.map((t) => [t.key, t]));
       const used = new Set();
@@ -525,7 +525,11 @@
       if (!reviewOnly) {
         const st = Lexicon.state();
         const freshCount = queue.filter((t) => t.isNew && t.hot).length;
-        let budget = Math.max(0, this.effectiveGoal(st) - freshCount);
+        // extra (continue-learning) batches lift the DDL cap — the
+        // caller asked for more new words on top of today's goal
+        let budget = extra
+          ? Math.max(0, this.effectiveGoal(st) * 2 - freshCount)
+          : Math.max(0, this.effectiveGoal(st) - freshCount);
         const cards = Lexicon.cards();
         const curTheme = Lexicon.currentTheme();
         const curId = curTheme ? curTheme.id : null;
@@ -576,7 +580,7 @@
           }
         }
         if (budget > 0) {
-          const extras = Lexicon.newCandidates(budget, 0, 0);
+          const extras = Lexicon.newCandidates(budget, 0, 0, extra);
           for (const n of extras) {
             if (used.has(n.key)) continue;
             used.add(n.key);
@@ -1843,6 +1847,8 @@
     bindActions() {
       $("btnStart").addEventListener("click", () => this.startSession(false));
       $("btnReview").addEventListener("click", () => this.startSession(true));
+      $("btnExtra").addEventListener("click", () => this.startSession(false, true));
+      $("btnDoneMore").addEventListener("click", () => this.startSession(false, true));
       $("btnDoneReturn").addEventListener("click", () => this.switchView("stats"));
       document.querySelectorAll("#dkFilter .deck-f").forEach((b) =>
         b.addEventListener("click", () => {

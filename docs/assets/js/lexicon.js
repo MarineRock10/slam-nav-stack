@@ -648,15 +648,19 @@
 
     /* ---- new-word queue (priority order, excluding known cards) ----
      * limit: daily new-word target; todayAdded: cards introduced
-     * today; reserved: slots already taken by flagged words. */
-    newCandidates(limit, todayAdded, reserved) {
+     * today; reserved: slots already taken by flagged words.
+     * ignoreToday: continue-learning mode — the DDL cap is lifted,
+     * the caller decides the batch size. */
+    newCandidates(limit, todayAdded, reserved, ignoreToday) {
       const cards = this.cards();
       const out = [];
       const now = Date.now();
       // fresh words introduced earlier today already count toward the goal
-      for (const k in cards) {
-        const c = cards[k];
-        if (c.added && (now - c.added) < 86400000) todayAdded++;
+      if (!ignoreToday) {
+        for (const k in cards) {
+          const c = cards[k];
+          if (c.added && (now - c.added) < 86400000) todayAdded++;
+        }
       }
       const need = Math.max(0, limit - todayAdded - (reserved || 0));
       if (need === 0) return out;
