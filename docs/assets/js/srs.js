@@ -44,9 +44,14 @@
 
       c.weak = 0; // success clears the weakness streak
 
-      if (q === 1) { // HARD: nudge forward, no ease penalty
+      if (q === 1) { // HARD: nudge forward (slowly), no ease penalty
         c.reps += 1;
-        c.ivl = Math.max(1, Math.round((c.ivl || 1) * 0.8));
+        // never regress or stall: one day longer than the current
+        // interval, capped at the GOOD step. (×0.8 would round 1→1
+        // and pin the word at "due tomorrow" forever after a single
+        // hint-assisted spelling — 56 cards were stuck that way.)
+        const goodStep = c.reps === 1 ? 1 : c.reps === 2 ? 6 : Math.round((c.ivl || 1) * c.ef);
+        c.ivl = Math.max(2, Math.min(goodStep, (c.ivl || 1) + 1));
         c.due = Date.now() + c.ivl * DAY;
         c.lvl = c.ivl >= 21 ? 2 : 1;
         return c;
