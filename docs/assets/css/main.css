@@ -816,6 +816,7 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 .sub-view.active { display: block; }
 .hot-dot { color: var(--amber); }
 .hot-badge { color: var(--amber); font-size: var(--fs-sm); }
+.core-star { color: var(--accent); font-size: var(--fs-sm); }
 
 /* sense cards */
 .sense-card .sense-label {

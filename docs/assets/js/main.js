@@ -1266,6 +1266,13 @@
       let q = rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : rate >= 0.5 ? 1 : 0;
       // recognition failure caps the grade — identification before recall
       if (sc.recOk === 0 && q > 1) q = 1;
+      /* tiered grading by word priority (p: 0 core / 1 extended /
+       * 2 supplement) — the pass bar reflects how much the word
+       * matters: core words must not be misidentified, supplement
+       * words (listening deck) pass on recognition alone */
+      const p = item.ent && item.ent.p != null ? item.ent.p : 1;
+      if (p === 0 && sc.recOk === 0) q = 0;          // core: miss → AGAIN
+      if (p === 2 && sc.recOk === 1) q = Math.max(q, 2); // supplement: know it → GOOD
       this.applyGrade(item, q);
       // word done — resume the spelling channel with the next word
       // (gap channel returns to the shuffled spell order)
@@ -1291,8 +1298,14 @@
         const pct = Math.round((rate / total) * 100);
         sum += pct;
         // grade shown must match the applied q: a failed recognition
-        // caps the grade at HARD even when typing was perfect
-        const effPct = sc.recOk === 0 ? Math.min(pct, 69) : pct;
+        // caps the grade at HARD even when typing was perfect; core
+        // words (p=0) drop to AGAIN on a recognition miss; supplement
+        // words (p=2) pass at GOOD when recognized
+        const p = item.ent && item.ent.p != null ? item.ent.p : 1;
+        let effPct = pct;
+        if (p === 0 && sc.recOk === 0) effPct = Math.min(effPct, 49);
+        else if (sc.recOk === 0) effPct = Math.min(effPct, 69);
+        else if (p === 2 && sc.recOk === 1) effPct = Math.max(effPct, 70);
         const label = effPct >= 90 ? "EASY" : effPct >= 70 ? "GOOD" : effPct >= 50 ? "HARD" : "AGAIN";
         const cls = effPct >= 70 ? "ok" : effPct >= 50 ? "warn" : "err";
         rows += '<div class="gr-row"><span class="gr-word">' + this.esc(item.ent.w) + "</span>" +
@@ -1590,6 +1603,7 @@
       $("dkList").innerHTML = slice.map((r) =>
         '<div class="dk-row">' +
         '<span class="dk-word">' + this.esc(r.ent.w) +
+        (r.ent.p === 0 ? ' <span class="core-star" title="CORE WORD">★</span>' : "") +
         (r.hot ? ' <span class="hot-badge" title="src: ' + this.esc(r.src || "") + '">🔥</span>' : "") + "</span>" +
         '<span class="dk-def">' + this.esc(r.ent.t || r.ent.d || "") + "</span>" +
         '<span class="dk-stage ' + r.stage + '">' + r.stage.toUpperCase() + "</span>" +
@@ -1686,7 +1700,9 @@
       const customSet = new Set(Object.keys(Lexicon.getCustom()));
       $("lgList").innerHTML = slice.map((r) =>
         '<div class="log-row">' +
-        '<span class="log-word">' + this.esc(r.ent.w) + (customSet.has(r.key) ?
+        '<span class="log-word">' + this.esc(r.ent.w) +
+        (r.ent.p === 0 ? ' <span class="core-star" title="CORE WORD">★</span>' : "") +
+        (customSet.has(r.key) ?
           ' <span class="log-custom">CUSTOM</span>' : "") + "</span>" +
         '<span class="log-trans">' + this.esc(Lexicon._cleanGloss ? Lexicon._cleanGloss(r.ent.t) : r.ent.t) + "</span>" +
         '<span class="log-state"><span class="' + r.cls + '">' + r.state + "</span>" +
