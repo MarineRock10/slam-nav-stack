@@ -68,7 +68,13 @@
       }
       if (q === 3) { // EASY: extra boost
         c.ef += 0.15;
-        if (c.reps > 1) c.ivl = Math.round(c.ivl * 1.3);
+        // a flawless learn day (spelling + gap-fill all correct) plus
+        // a flawless next-day review is enough to reach mastered —
+        // two perfect passes prove the word is truly known. GOOD stays
+        // on the standard SM-2 climb (1→6→15→38) because a hint or
+        // mistake in spelling means it is not quite solid yet.
+        if (c.reps === 2) c.ivl = 21;
+        else if (c.reps > 1) c.ivl = Math.round(c.ivl * 1.3);
       } else { // GOOD — standard SM-2 q=4: ease factor unchanged
         // (q=4 in SM-2's 0..5 scale is the neutral step)
       }
