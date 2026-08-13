@@ -312,6 +312,17 @@ html, body {
   overflow: hidden;
 }
 .qseg-fill { display: block; height: 100%; }
+/* goal overachieved: the segment glows and pulses so an excess
+   (293/122 = 240%) reads as a win, not a clipped bar */
+.qseg-fill.over, .statbar-fill.over {
+  background: linear-gradient(90deg, var(--cyan), #7fffd4);
+  box-shadow: 0 0 8px rgba(51, 255, 153, 0.7);
+  animation: overPulse 1.6s ease-in-out infinite;
+}
+@keyframes overPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
 .queue-legend {
   display: flex;
   flex-wrap: wrap;

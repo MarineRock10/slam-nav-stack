@@ -209,7 +209,9 @@
 
       if (this.stView === "today") {
         // ---- TODAY view: composite progress across all factors ----
-        // new words 70% · reviews 30%
+        // new words 70% · reviews 30%; both overachieve visibly —
+        // 293/122 must read as 240%, not silently cap at 100%
+        const newPct = effGoal ? Math.round((newToday / effGoal) * 100) : 0;
         const newScore = Math.min(newToday / effGoal, 1) * 70;
         const revScore = Math.min((hist.r || 0) / Math.max(1, Math.round(effGoal * 0.5)), 1) * 30;
         const totalPct = Math.round(newScore + revScore);
@@ -218,15 +220,21 @@
         $("stLblDue").textContent = "REVIEWS TODAY";
         $("stLblStreak").textContent = "TOTAL ACTIVITY";
         $("stLblCover").textContent = "DAILY GOAL (NEW WORDS)";
-        $("stToday").textContent = totalPct + "%";
+        // big number shows the true new-word completion, uncapped
+        $("stToday").textContent = (newPct > 100 ? "▲ " : "") + newPct + "%";
         $("stTodayPct").textContent = "NEW " + newToday + "/" + effGoal + " · REV " + (hist.r || 0);
         $("stDue").textContent = (hist.r || 0) + " / " + counts.due;
         $("stDueSub").textContent = "REVIEWS DONE / QUEUED";
         $("stStreak").textContent = todayTotal;
         $("stStreakSub").textContent = "TOTAL ACTIVITIES";
-        const goalPct = Math.min(100, Math.round((newToday / effGoal) * 100));
-        $("stCoverage").textContent = newToday >= effGoal ? "GOAL MET ✓" : goalPct + "%";
-        $("stCoverageFill").style.width = totalPct + "%";
+        const over = newToday > effGoal;
+        const goalPct = Math.min(100, newPct);
+        $("stCoverage").textContent = over
+          ? newPct + "% · GOAL MET ✓"
+          : (newToday >= effGoal ? "GOAL MET ✓" : goalPct + "%");
+        const fill = $("stCoverageFill");
+        fill.style.width = goalPct + "%";
+        fill.classList.toggle("over", over);
       } else {
         // ---- ALL TIME view ----
         $("stLblExam").textContent = "MISSION ETA";
@@ -262,20 +270,28 @@
       }
 
       // ---- TODAY QUEUE: due reviews + remaining new budget, with progress ----
+      // when the new-word goal is already met the NEW segment shows
+      // full-width instead of collapsing to zero — overachievement
+      // stays visible in the queue bar
       const qDue = counts.due;
       const qNew = Math.max(0, effGoal - (hist.n || 0));
+      const qNewOver = (hist.n || 0) > effGoal;
       const qDone = (hist.n || 0) + (hist.r || 0);
       const qTotal = qDue + qNew;
-      $("stQueueText").textContent = qDue + " REVIEWS + " + qNew + " NEW = " + qTotal + " · DONE " + qDone;
+      $("stQueueText").textContent = qDue + " REVIEWS + " +
+        (qNewOver ? "NEW ✓ (GOAL MET)" : qNew + " NEW") + " = " + qTotal + " · DONE " + qDone;
       $("stQueueRev").textContent = qDue;
       $("stQueueHot").textContent = hot;
-      $("stQueueNew").textContent = qNew;
+      $("stQueueNew").textContent = qNewOver ? "✓" : qNew;
       $("stQueueDone").textContent = qDone;
       const revW = qTotal ? (Math.min(qDue, hist.r || 0) / qTotal) * 100 : 0;
-      const newW = qTotal ? (Math.min(qNew, hist.n || 0) / qTotal) * 100 : 0;
+      // NEW segment: full width once the goal is met (overachieve = 100%);
+      // reviews compress so the two segments never overlap
+      const newW = qNewOver ? 100 : qTotal ? (Math.min(qNew, hist.n || 0) / qTotal) * 100 : 0;
+      const revWFin = qNewOver ? Math.min(revW, 30) : revW;
       $("stQueueFill").innerHTML =
-        '<i class="qseg-fill" style="width:' + revW + "%;background:var(--amber)\"></i>" +
-        '<i class="qseg-fill" style="width:' + newW + "%;background:var(--cyan)\"></i>";
+        '<i class="qseg-fill" style="width:' + revWFin + "%;background:var(--amber)\"></i>" +
+        '<i class="qseg-fill' + (qNewOver ? " over" : "") + '" style="width:' + newW + "%;background:var(--cyan)\"></i>";
     },
 
     /* open the vocab deck pre-filtered to the hot zone */
