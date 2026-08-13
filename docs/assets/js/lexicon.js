@@ -139,6 +139,20 @@
         if (c[3]) ent.e = c[3];   // optional example sentence
         _lexicon.set(key, ent);
       }
+      // single words extracted from multi-word phrases (补录) — they
+      // become normal study words; entries that somehow exist keep
+      // their original tier, otherwise the extracted tier applies
+      const phw = global.PHRASE_WORDS || [];
+      for (const row of phw) {
+        const w = row[0];
+        const key = String(w).toLowerCase();
+        let ent = _lexicon.get(key);
+        if (!ent) {
+          ent = { w: key, t: "", us: "", uk: "", p: row[1] == null ? 2 : row[1], d: "", e: "" };
+          _lexicon.set(key, ent);
+        }
+        if (!ent.t && row[2]) ent.t = row[2]; // offline Chinese gloss
+      }
       return _lexicon;
     },
 
@@ -665,21 +679,23 @@
       const need = Math.max(0, limit - todayAdded - (reserved || 0));
       if (need === 0) return out;
       // iterate priority tiers: core(0) -> extended(1) -> supplement(2);
-      // manually added words lead their tier (主动添加 = 主动想学)
+      // manually added words lead their tier (主动添加 = 主动想学).
+      // Multi-word phrases are excluded — they have their own quiz
+      // module (PHRASES) and would crowd the single-word flow.
       const seen = {};
       const custom = this.getCustom();
       for (let tier = 0; tier <= 2; tier++) {
         for (const key in custom) {
           const ent = this.load().get(key);
           if (!ent || ent.p !== tier) continue;
-          if (cards[key] || seen[key]) continue;
+          if (this.isPhrase(key) || cards[key] || seen[key]) continue;
           seen[key] = true;
           out.push({ key, ent });
           if (out.length >= need) return out;
         }
         for (const [key, ent] of this.load()) {
           if (ent.p !== tier) continue;
-          if (cards[key]) continue;
+          if (this.isPhrase(key) || cards[key]) continue;
           if (seen[key]) continue;
           seen[key] = true;
           out.push({ key, ent });
@@ -688,6 +704,21 @@
       }
       return out;
     },
+
+    /* ---- multi-word phrases (搭配短语) ----
+     * Lexicon rows containing a space ("air pollution", "bar code")
+     * are collocations, not single words — they get their own quiz
+     * module and stay OUT of the single-word study flow. */
+    phraseList() {
+      const out = [];
+      for (const [key, ent] of this.load()) {
+        if (key.includes(" ")) out.push({ key, ent });
+      }
+      // core-tier phrases first, then by key
+      out.sort((a, b) => (a.ent.p - b.ent.p) || a.key.localeCompare(b.key));
+      return out;
+    },
+    isPhrase(key) { return String(key).includes(" "); },
 
     /* ---- review queue: due cards, oldest first ---- */
     dueCards() {

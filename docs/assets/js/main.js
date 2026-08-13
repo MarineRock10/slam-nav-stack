@@ -112,12 +112,13 @@
     },
     showSub() {
       document.querySelectorAll(".sub-view").forEach((sec) => sec.classList.remove("active"));
-      const map = { train: "vocabTrain", deck: "vocabDeck", lexicon: "vocabLexicon", speaking: "vocabSpeaking" };
+      const map = { train: "vocabTrain", deck: "vocabDeck", lexicon: "vocabLexicon", speaking: "vocabSpeaking", phrases: "vocabPhrases" };
       const el = $(map[this.vsub]);
       if (el) el.classList.add("active");
       if (this.vsub === "deck") this.renderDeck();
       if (this.vsub === "lexicon") this.renderLog();
       if (this.vsub === "speaking") this.renderSpeaking();
+      if (this.vsub === "phrases") this.renderPhrases();
       if (this.vsub === "train" && !this.session) this.renderIdleConsole();
     },
 
@@ -570,7 +571,7 @@
         //    drives the order), then core-first top-up
         if (budget > 0 && curId) {
           const pool = Lexicon.themePool(curId)
-            .filter((w) => !used.has(w) && !cards[w])
+            .filter((w) => !used.has(w) && !cards[w] && !Lexicon.isPhrase(w))
             .sort((a, b) => ((Lexicon.get(a) || {}).p || 2) - ((Lexicon.get(b) || {}).p || 2));
           for (const w of pool) {
             if (budget <= 0) break;
@@ -1850,6 +1851,167 @@
 
       root.querySelectorAll(".spk-play").forEach((b) =>
         b.addEventListener("click", () => this.speak(b.dataset.spk)));
+    },
+
+    /* ---- phrase bank (搭配短语) ----
+     * Multi-word collocations ("air pollution", "bar code") get
+     * their own 4-choice meaning quiz. Purely practice — no SRS
+     * cards are written, phrases never enter the word queue. */
+    _phQuiz: null,       // { list: [...], idx, score, done }
+    _phPage: 0,
+    _phSearch: "",
+
+    renderPhrases() {
+      const list = Lexicon.phraseList();
+      const cards = Lexicon.cards();
+      $("phCount").textContent = list.length + " PHRASES";
+
+      // stats strip: total / learned / core / remaining
+      const learned = list.filter((p) => cards[p.key]).length;
+      const core = list.filter((p) => p.ent.p === 0).length;
+      $("phStats").innerHTML =
+        '<span>TOTAL <b>' + list.length + "</b></span>" +
+        '<span>LEARNED <b>' + learned + "</b></span>" +
+        '<span>CORE TIER <b>' + core + "</b></span>" +
+        '<span>REMAINING <b>' + (list.length - learned) + "</b></span>";
+
+      // quiz area: active quiz card or start prompt
+      if (this._phQuiz && !this._phQuiz.done) {
+        this.renderPhraseCard();
+      } else if (this._phQuiz && this._phQuiz.done) {
+        this.renderPhraseResult();
+      } else {
+        $("phQuiz").innerHTML =
+          '<div class="card"><div class="card-word" style="font-size:16px">PHRASE QUIZ — PICK THE MEANING</div>' +
+          '<div class="card-sub" style="color:var(--fg-dim);font-size:12px">' +
+          "PRACTICE ONLY · NO SRS CARDS · CORE PHRASES FIRST · " + (list.length - learned) + " UNLEARNED</div></div>";
+      }
+
+      // list with search + pager
+      const q = this._phSearch.toLowerCase();
+      const rows = list.filter((p) => !q || p.key.includes(q));
+      const PER = 100;
+      const pages = Math.max(1, Math.ceil(rows.length / PER));
+      if (this._phPage >= pages) this._phPage = pages - 1;
+      const slice = rows.slice(this._phPage * PER, (this._phPage + 1) * PER);
+      $("phList").innerHTML = slice.map((p) =>
+        '<div class="log-row">' +
+        '<span class="log-word">' + this.esc(p.key) +
+        (p.ent.p === 0 ? ' <span class="core-star" title="CORE">★</span>' : "") + "</span>" +
+        '<span class="log-trans">' + this.esc(this.zhHead(p.key) || p.ent.t || p.ent.d || "") + "</span>" +
+        '<span class="log-state"><span class="' + (cards[p.key] ? "mature" : "new") + '">' +
+        (cards[p.key] ? "SEEN" : "NEW") + "</span>" +
+        '<button class="btn dk-btn" data-phquiz="' + this.esc(p.key) + '">QUIZ</button></span>' +
+        "</div>").join("") || '<div class="log-row"><span class="log-word">NO MATCHES</span></div>';
+      $("phList").querySelectorAll("[data-phquiz]").forEach((b) =>
+        b.addEventListener("click", () => this.phraseQuiz([b.dataset.phquiz])));
+      $("phPager").innerHTML =
+        '<button class="btn" id="phPrev">◂ PREV</button>' +
+        "<span>PAGE " + (this._phPage + 1) + " / " + pages + "</span>" +
+        '<button class="btn" id="phNext">NEXT ▸</button>';
+      $("phPrev").addEventListener("click", () => { if (this._phPage > 0) { this._phPage--; this.renderPhrases(); } });
+      $("phNext").addEventListener("click", () => { if (this._phPage < pages - 1) { this._phPage++; this.renderPhrases(); } });
+      $("phStart").addEventListener("click", () => this.phraseQuiz(null));
+    },
+
+    /* batch quiz: unlearned core phrases first, then the rest */
+    phraseQuiz(keys) {
+      const all = Lexicon.phraseList();
+      const cards = Lexicon.cards();
+      const pick = keys || all
+        .filter((p) => !cards[p.key])
+        .concat(all.filter((p) => cards[p.key]));
+      if (!pick.length) return;
+      this._phQuiz = { list: pick, idx: 0, score: 0, done: false, wrong: [] };
+      this._phPage = 0;
+      this.renderPhrases();
+    },
+
+    renderPhraseCard() {
+      const qz = this._phQuiz;
+      const item = qz.list[qz.idx];
+      const zh = this.zhHead(item.key) || item.ent.t || item.ent.d || "";
+      // distractors: zh heads of other phrases (same tier first)
+      const pool = this._shuffled(Lexicon.phraseList().filter((p) => p.key !== item.key));
+      const opts = [zh];
+      const seen = new Set([zh]);
+      for (const p of pool) {
+        const z = this.zhHead(p.key) || p.ent.t || "";
+        if (!z || seen.has(z)) continue;
+        if (z.length > 64) continue;
+        seen.add(z);
+        opts.push(z);
+        if (opts.length >= 4) break;
+      }
+      // shuffle options while keeping the answer
+      for (let i = opts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = opts[i]; opts[i] = opts[j]; opts[j] = t;
+      }
+      const ansIdx = opts.indexOf(zh);
+      const ent = item.ent;
+      $("phQuiz").innerHTML =
+        '<div class="card sense-card">' +
+        '<span class="card-wp">PHRASE ' + (qz.idx + 1) + "/" + qz.list.length +
+        " · SCORE " + qz.score + "</span>" +
+        '<span class="card-status learn">PHRASE RECOGNITION</span>' +
+        '<div class="recognize-word">' + this.esc(item.key) + "</div>" +
+        (ent.d ? '<div class="card-sub" style="color:var(--fg-dim);font-size:12px">' + this.esc(ent.d) + "</div>" : "") +
+        '<div class="recognize-opts" id="phOpts">' +
+        opts.map((o, i) => '<button class="rec-opt" data-i="' + i + '"><span class="rec-key">' + (i + 1) + "</span>" +
+          this.esc(o) + "</button>").join("") +
+        "</div>" +
+        '<div class="typing-feedback" id="phFeedback"></div>' +
+        '<div class="step-bar nav-bar" id="phNav" style="display:none">' +
+        '<button class="btn btn-primary" id="phNextQ">NEXT PHRASE ▸</button></div>' +
+        "</div>";
+      const fb = $("phFeedback");
+      const nav = $("phNav");
+      const lock = () => {
+        $("phOpts").querySelectorAll(".rec-opt").forEach((b) => (b.disabled = true));
+        nav.style.display = "flex";
+      };
+      $("phOpts").querySelectorAll(".rec-opt").forEach((b) =>
+        b.addEventListener("click", () => {
+          if (fb.dataset.done) return;
+          fb.dataset.done = "1";
+          const i = parseInt(b.dataset.i, 10);
+          const correct = i === ansIdx;
+          if (correct) qz.score++;
+          else qz.wrong.push(item.key);
+          $("phOpts").querySelectorAll(".rec-opt").forEach((x, j) => {
+            x.classList.add(j === ansIdx ? "rec-correct" : (j === i ? "rec-wrong" : "rec-dim"));
+          });
+          fb.className = "typing-feedback " + (correct ? "ok" : "err");
+          fb.textContent = correct ? "✓ " + zh : "✗ — CORRECT: " + zh;
+          lock();
+        }));
+      $("phNextQ").addEventListener("click", () => {
+        qz.idx++;
+        if (qz.idx >= qz.list.length) qz.done = true;
+        this.renderPhrases();
+      });
+    },
+
+    renderPhraseResult() {
+      const qz = this._phQuiz;
+      const total = qz.list.length;
+      const pct = total ? Math.round((qz.score / total) * 100) : 0;
+      $("phQuiz").innerHTML =
+        '<div class="card sense-card">' +
+        '<span class="card-wp">QUIZ COMPLETE</span>' +
+        '<span class="card-status ' + (pct >= 70 ? "mature" : pct >= 50 ? "learn" : "new") + '">' +
+        (pct >= 90 ? "EXCELLENT" : pct >= 70 ? "GOOD" : pct >= 50 ? "REVIEW NEEDED" : "WEAK") + "</span>" +
+        '<div class="sense-label">' + qz.score + " / " + total + " CORRECT (" + pct + "%)</div>" +
+        (qz.wrong.length
+          ? '<div class="log-summary" style="margin-top:var(--sp-2)">' +
+            qz.wrong.map((w) => '<span class="spk-word">' + this.esc(w) + "</span>").join("") + "</div>"
+          : '<div class="sense-label">ALL CORRECT — PHRASES LOCKED IN ✓</div>') +
+        '<div class="step-bar nav-bar"><button class="btn btn-primary" id="phRestart">↻ QUIZ AGAIN</button>' +
+        '<button class="btn" id="phDone">DONE</button></div>' +
+        "</div>";
+      $("phRestart").addEventListener("click", () => this.phraseQuiz(null));
+      $("phDone").addEventListener("click", () => { this._phQuiz = null; this.renderPhrases(); });
     },
 
     doExport() {

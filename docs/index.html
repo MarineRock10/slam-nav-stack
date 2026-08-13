@@ -128,6 +128,7 @@
         <button class="tab active" data-sub="train">TRAIN</button>
         <button class="tab" data-sub="deck">MEMORY DECK</button>
         <button class="tab" data-sub="lexicon">LEXICON</button>
+        <button class="tab" data-sub="phrases">PHRASES</button>
         <button class="tab" data-sub="speaking">SPEAKING</button>
       </nav>
 
@@ -205,6 +206,21 @@
         <div class="panel">
           <div class="panel-title"><span class="pt-dot"></span>SPEAKING CORE <span class="pt-tag">16 WORDS · 8 PAIRS</span></div>
           <div class="speak-grid" id="spkRoot"></div>
+        </div>
+      </div>
+
+      <!-- PHRASES: multi-word collocation quiz -->
+      <div id="vocabPhrases" class="sub-view">
+        <div class="panel">
+          <div class="panel-title"><span class="pt-dot"></span>PHRASE BANK <span class="pt-tag" id="phCount">0 PHRASES</span></div>
+          <div class="ph-stats" id="phStats"></div>
+          <div class="ph-quiz" id="phQuiz"></div>
+          <div class="log-controls">
+            <input type="text" id="phSearch" class="input" placeholder="SEARCH PHRASES... (e.g. 'air pollution')" autocomplete="off">
+            <button class="btn btn-primary" id="phStart">▸ START PHRASE QUIZ</button>
+          </div>
+          <div class="log-list" id="phList"></div>
+          <div class="log-pager" id="phPager"></div>
         </div>
       </div>
     </section>
@@ -286,25 +302,26 @@
   </footer>
 </div>
 
-<script src="assets/js/words/core-vocab.js?v=17"></script>
-<script src="assets/js/words/core-zh.js?v=17"></script>
-<script src="assets/js/words/phonetic-fill.js?v=17"></script>
-<script src="assets/js/words/defs-4000eew.js?v=17"></script>
-<script src="assets/js/words/defs-gen-1.js?v=17"></script>
-<script src="assets/js/words/defs-gen-2.js?v=17"></script>
-<script src="assets/js/words/defs-gen-3.js?v=17"></script>
-<script src="assets/js/words/defs-gen-4.js?v=17"></script>
-<script src="assets/js/words/defs-gen-5.js?v=17"></script>
-<script src="assets/js/words/sentence-zh-1.js?v=17"></script>
-<script src="assets/js/words/ielts100.js?v=17"></script>
-<script src="assets/js/words/ielts-data.js?v=17"></script>
-<script src="assets/js/words/theme-map.js?v=17"></script>
-<script src="assets/js/words/roots.js?v=17"></script>
-<script src="assets/js/words/speaking-core.js?v=17"></script>
-<script src="assets/js/srs.js?v=17"></script>
-<script src="assets/js/lexicon.js?v=17"></script>
-<script src="assets/js/telemetry.js?v=17"></script>
-<script src="assets/js/cloud.js?v=17"></script>
-<script src="assets/js/main.js?v=17"></script>
+<script src="assets/js/words/core-vocab.js?v=18"></script>
+<script src="assets/js/words/core-zh.js?v=18"></script>
+<script src="assets/js/words/phonetic-fill.js?v=18"></script>
+<script src="assets/js/words/defs-4000eew.js?v=18"></script>
+<script src="assets/js/words/defs-gen-1.js?v=18"></script>
+<script src="assets/js/words/defs-gen-2.js?v=18"></script>
+<script src="assets/js/words/defs-gen-3.js?v=18"></script>
+<script src="assets/js/words/defs-gen-4.js?v=18"></script>
+<script src="assets/js/words/defs-gen-5.js?v=18"></script>
+<script src="assets/js/words/sentence-zh-1.js?v=18"></script>
+<script src="assets/js/words/ielts100.js?v=18"></script>
+<script src="assets/js/words/ielts-data.js?v=18"></script>
+<script src="assets/js/words/theme-map.js?v=18"></script>
+<script src="assets/js/words/roots.js?v=18"></script>
+<script src="assets/js/words/speaking-core.js?v=18"></script>
+<script src="assets/js/words/phrase-words.js?v=18"></script>
+<script src="assets/js/srs.js?v=18"></script>
+<script src="assets/js/lexicon.js?v=18"></script>
+<script src="assets/js/telemetry.js?v=18"></script>
+<script src="assets/js/cloud.js?v=18"></script>
+<script src="assets/js/main.js?v=18"></script>
 </body>
 </html>

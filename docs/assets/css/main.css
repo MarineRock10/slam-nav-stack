@@ -1429,3 +1429,19 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   border-left: 2px solid var(--border-bright);
   border-top: none;
 }
+
+/* ---------------- phrase bank (搭配短语) ---------------- */
+.ph-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-2);
+  background: var(--bg-panel2);
+  border: 1px solid var(--border-bright);
+  border-radius: 3px;
+  color: var(--fg-dim);
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.06em;
+}
+.ph-stats b { color: var(--fg-bright); font-size: var(--fs-sm); margin-left: 3px; }
