@@ -112,11 +112,12 @@
     },
     showSub() {
       document.querySelectorAll(".sub-view").forEach((sec) => sec.classList.remove("active"));
-      const map = { train: "vocabTrain", deck: "vocabDeck", lexicon: "vocabLexicon" };
+      const map = { train: "vocabTrain", deck: "vocabDeck", lexicon: "vocabLexicon", speaking: "vocabSpeaking" };
       const el = $(map[this.vsub]);
       if (el) el.classList.add("active");
       if (this.vsub === "deck") this.renderDeck();
       if (this.vsub === "lexicon") this.renderLog();
+      if (this.vsub === "speaking") this.renderSpeaking();
       if (this.vsub === "train" && !this.session) this.renderIdleConsole();
     },
 
@@ -1745,6 +1746,61 @@
         }
       };
       reader.readAsText(file);
+    },
+
+    /* ---- speaking core (最简口语模块) ----
+     * 16 words (8 reason + 8 result), fixed 8 pairs, the 10-second
+     * answer template and the one-line Part3 template. Every item
+     * carries a ◉ PLAY button wired to the shared TTS chain. */
+    renderSpeaking() {
+      const S = global.SPEAKING_CORE || {};
+      const root = $("spkRoot");
+      if (!root || !S.reasons) return;
+
+      const zhOf = (arr, en) => {
+        const row = (arr || []).find((r) => r[0] === en);
+        return row ? row[1] : "";
+      };
+      const wordChip = (en, zh) =>
+        '<span class="spk-word">' + this.esc(en) +
+        '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(en) + '">◉</button>' +
+        '<span class="spk-zh">' + this.esc(zh) + "</span></span>";
+
+      const wordGrid = (title, sub, arr) =>
+        '<div class="spk-block"><div class="spk-head">' +
+        '<span class="spk-title">' + title + "</span><span class=\"spk-sub\">" + sub + "</span></div>" +
+        '<div class="spk-grid">' + arr.map((r) => wordChip(r[0], r[1])).join("") + "</div></div>";
+
+      const pairRows = (S.pairs || []).map((p) =>
+        '<div class="spk-pair">' +
+        '<span class="spk-pair-a">' + this.esc(p[0]) + "</span>" +
+        '<span class="spk-pair-arrow">→</span>' +
+        '<span class="spk-pair-b">' + this.esc(p[1]) + "</span>" +
+        '<button class="tts-btn spk-play" title="PLAY PAIR" data-spk="' + this.esc(p[0] + ". So " + p[1]) + '">◉</button>' +
+        '<span class="spk-zh">' + this.esc(zhOf(S.results, p[1])) + "</span>" +
+        "</div>").join("");
+
+      const tplCard = (label, arr) =>
+        '<div class="spk-block"><div class="spk-head">' +
+        '<span class="spk-title">' + label + "</span></div>" +
+        arr.map((r) =>
+          '<div class="spk-tpl">' +
+          '<div class="spk-tpl-en">' + this.esc(r[0]) +
+          '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(r[0]) + '">◉</button></div>' +
+          '<div class="spk-tpl-zh">' + this.esc(r[1]) + "</div></div>").join("") +
+        "</div>";
+
+      root.innerHTML =
+        wordGrid("REASON WORDS", "8 · 原因词 · WHY", S.reasons || []) +
+        wordGrid("RESULT WORDS", "8 · 结果词 · SO", S.results || []) +
+        '<div class="spk-block"><div class="spk-head"><span class="spk-title">FIXED PAIRS</span>' +
+        '<span class="spk-sub">8 GROUPS · 背死 · 原因 → 结果</span></div>' +
+        '<div class="spk-pairs">' + pairRows + "</div></div>" +
+        tplCard("10-SECOND ANSWER · PART 1/2", S.quick || []) +
+        tplCard("PART 3 · ONE-LINE TEMPLATE", S.part3 || []);
+
+      root.querySelectorAll(".spk-play").forEach((b) =>
+        b.addEventListener("click", () => this.speak(b.dataset.spk)));
     },
 
     doExport() {
