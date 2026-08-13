@@ -1748,10 +1748,10 @@
       reader.readAsText(file);
     },
 
-    /* ---- speaking core (最简口语模块) ----
-     * 16 words (8 reason + 8 result), fixed 8 pairs, the 10-second
-     * answer template and the one-line Part3 template. Every item
-     * carries a ◉ PLAY button wired to the shared TTS chain. */
+    /* ---- speaking core (最简口语模块 · 6.0 秘籍) ----
+     * 16 words (8 reason + 8 result) + fixed pairs, Part1 秘籍,
+     * Part2 万能故事 and Part3 三件套 — every English item carries
+     * a ◉ PLAY button wired to the shared TTS chain. */
     renderSpeaking() {
       const S = global.SPEAKING_CORE || {};
       const root = $("spkRoot");
@@ -1761,41 +1761,90 @@
         const row = (arr || []).find((r) => r[0] === en);
         return row ? row[1] : "";
       };
-      const wordChip = (en, zh) =>
-        '<span class="spk-word">' + this.esc(en) +
-        '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(en) + '">◉</button>' +
-        '<span class="spk-zh">' + this.esc(zh) + "</span></span>";
+      const play = (en) => '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(en) + '">◉</button>';
+      const head = (title, sub) =>
+        '<div class="spk-head"><span class="spk-title">' + title + "</span>" +
+        (sub ? '<span class="spk-sub">' + sub + "</span>" : "") + "</div>";
+      const block = (title, sub, inner) =>
+        '<div class="spk-block">' + head(title, sub) + inner + "</div>";
 
+      const wordChip = (en, zh) =>
+        '<span class="spk-word">' + this.esc(en) + play(en) +
+        '<span class="spk-zh">' + this.esc(zh) + "</span></span>";
       const wordGrid = (title, sub, arr) =>
-        '<div class="spk-block"><div class="spk-head">' +
-        '<span class="spk-title">' + title + "</span><span class=\"spk-sub\">" + sub + "</span></div>" +
-        '<div class="spk-grid">' + arr.map((r) => wordChip(r[0], r[1])).join("") + "</div></div>";
+        block(title, sub, '<div class="spk-grid">' + arr.map((r) => wordChip(r[0], r[1])).join("") + "</div>");
 
       const pairRows = (S.pairs || []).map((p) =>
         '<div class="spk-pair">' +
         '<span class="spk-pair-a">' + this.esc(p[0]) + "</span>" +
         '<span class="spk-pair-arrow">→</span>' +
-        '<span class="spk-pair-b">' + this.esc(p[1]) + "</span>" +
-        '<button class="tts-btn spk-play" title="PLAY PAIR" data-spk="' + this.esc(p[0] + ". So " + p[1]) + '">◉</button>' +
+        '<span class="spk-pair-b">' + this.esc(p[1]) + "</span>" + play(p[0] + ". So " + p[1]) +
         '<span class="spk-zh">' + this.esc(zhOf(S.results, p[1])) + "</span>" +
         "</div>").join("");
 
       const tplCard = (label, arr) =>
-        '<div class="spk-block"><div class="spk-head">' +
-        '<span class="spk-title">' + label + "</span></div>" +
-        arr.map((r) =>
-          '<div class="spk-tpl">' +
-          '<div class="spk-tpl-en">' + this.esc(r[0]) +
-          '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(r[0]) + '">◉</button></div>' +
-          '<div class="spk-tpl-zh">' + this.esc(r[1]) + "</div></div>").join("") +
-        "</div>";
+        block(label, null,
+          arr.map((r) =>
+            '<div class="spk-tpl">' +
+            '<div class="spk-tpl-en">' + this.esc(r[0]) + play(r[0]) + "</div>" +
+            '<div class="spk-tpl-zh">' + this.esc(r[1]) + "</div></div>").join(""));
+
+      /* ---- Part1 秘籍：开头 + 固定理由 + 真题 ---- */
+      const p1 = S.part1 || {};
+      const p1qa = (p1.examples || []).map((x) =>
+        '<div class="spk-qa">' +
+        '<div class="spk-qa-q"><span class="spk-qa-tag">Q</span>' + this.esc(x.q) + play(x.q) +
+        '<span class="spk-zh">' + this.esc(x.qz) + "</span></div>" +
+        '<div class="spk-qa-a"><span class="spk-qa-tag">A</span>' + this.esc(x.a) + play(x.a) +
+        '<span class="spk-zh">' + this.esc(x.az) + "</span></div></div>").join("");
+      const part1Html =
+        block("PART 1 · 秘籍", p1.rule + " — " + (p1.ruleZh || ""),
+          block("开头 · 选一个", null, '<div class="spk-grid">' +
+            (p1.openers || []).map((r) => wordChip(r[0], r[1])).join("") + "</div>") +
+          block("固定理由 · 只背 1 句", null, '<div class="spk-grid">' +
+            (p1.fixedReasons || []).map((r) => wordChip(r[0], r[1])).join("") + "</div>") +
+          block("真题示范", "答 2 句 → 停", p1qa));
+
+      /* ---- Part2 万能故事 ---- */
+      const p2 = S.part2 || {};
+      const p2struct = (p2.structure || []).map((s) =>
+        '<div class="spk-tpl spk-part2">' +
+        '<span class="spk-part2-tag">' + this.esc(s.tag) + "</span>" +
+        '<span class="spk-tpl-en">' + this.esc(s.en) + play(s.en) + "</span>" +
+        '<span class="spk-tpl-zh">' + this.esc(s.zh) + "</span></div>").join("");
+      const part2Html =
+        block("PART 2 · 万能故事", "一个故事套所有题",
+          '<div class="spk-event">' + this.esc(p2.event || "") + "</div>" +
+          block("关键词", null, '<div class="spk-grid">' +
+            (p2.keywords || []).map((k) => '<span class="spk-word spk-kw">' + this.esc(k) + play(k) + "</span>").join("") + "</div>") +
+          block("固定结构", "开头 → 中间 → 结尾", p2struct));
+
+      /* ---- Part3 三件套 ---- */
+      const p3 = S.part3kit || {};
+      const kitOf = (key, label) => {
+        const k = p3[key] || {};
+        return block(label,
+          '<span class="spk-when">' + this.esc(k.when) + '<span class="spk-zh">' + this.esc(k.whenZh || "") + "</span></span>",
+          block("真题例子", null, '<div class="spk-grid">' +
+            (k.examples || []).map((e) => '<span class="spk-word">' + this.esc(e) + play(e) + "</span>").join("") + "</div>") +
+          block("固定接法", null, (k.formula || []).map((f) =>
+            '<div class="spk-tpl"><div class="spk-tpl-en">' + this.esc(f[0]) + play(f[0]) +
+            '</div><div class="spk-tpl-zh">' + this.esc(f[1]) + "</div></div>").join("")));
+      };
+      const part3Html =
+        block("PART 3 · 三件套", "先选一个开头",
+          block("开头三选一", null, '<div class="spk-grid">' +
+            (p3.openers || []).map((r) => wordChip(r[0], r[1])).join("") + "</div>") +
+          kitOf("yes", "用 YES 的题") +
+          kitOf("notreally", "用 NOT REALLY 的题") +
+          kitOf("depends", "用 IT DEPENDS 的题"));
 
       root.innerHTML =
         wordGrid("REASON WORDS", "8 · 原因词 · WHY", S.reasons || []) +
         wordGrid("RESULT WORDS", "8 · 结果词 · SO", S.results || []) +
-        '<div class="spk-block"><div class="spk-head"><span class="spk-title">FIXED PAIRS</span>' +
-        '<span class="spk-sub">8 GROUPS · 背死 · 原因 → 结果</span></div>' +
-        '<div class="spk-pairs">' + pairRows + "</div></div>" +
+        block("FIXED PAIRS", "8 GROUPS · 背死 · 原因 → 结果",
+          '<div class="spk-pairs">' + pairRows + "</div>") +
+        part1Html + part2Html + part3Html +
         tplCard("10-SECOND ANSWER · PART 1/2", S.quick || []) +
         tplCard("PART 3 · ONE-LINE TEMPLATE", S.part3 || []);
 
