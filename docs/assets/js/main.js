@@ -171,12 +171,17 @@
       $("stExam").textContent = daysLeft + "D";
       $("stExamDate").textContent = "TARGET " + st.settings.examDate;
 
+      // words introduced since local midnight — a calendar-day window,
+      // NOT a 24h sliding one (last night's words must not count as
+      // "today" when the page opens the next morning)
       let newToday = 0;
-      const now = Date.now();
+      const dayStart = new Date();
+      dayStart.setHours(0, 0, 0, 0);
+      const dayStartMs = dayStart.getTime();
       const cards = Lexicon.cards();
       for (const k in cards) {
         const c = cards[k];
-        if (c.added && now - c.added < DAY) newToday++;
+        if (c.added && c.added >= dayStartMs) newToday++;
       }
       // daily target follows the DDL when goalAuto is on — one value
       // everywhere so TODAY and ALL TIME views never drift

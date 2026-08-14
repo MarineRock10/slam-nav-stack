@@ -668,12 +668,16 @@
     newCandidates(limit, todayAdded, reserved, ignoreToday) {
       const cards = this.cards();
       const out = [];
-      const now = Date.now();
-      // fresh words introduced earlier today already count toward the goal
+      // fresh words introduced since local midnight count toward the
+      // goal — a calendar-day window, not 24h sliding (yesterday's
+      // words must not shrink today's budget)
       if (!ignoreToday) {
+        const dayStart = new Date();
+        dayStart.setHours(0, 0, 0, 0);
+        const dayStartMs = dayStart.getTime();
         for (const k in cards) {
           const c = cards[k];
-          if (c.added && (now - c.added) < 86400000) todayAdded++;
+          if (c.added && c.added >= dayStartMs) todayAdded++;
         }
       }
       const need = Math.max(0, limit - todayAdded - (reserved || 0));
