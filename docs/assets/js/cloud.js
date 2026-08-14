@@ -103,19 +103,21 @@
     apply(data) {
       const L = global.Lexicon;
       if (!L) return;
-      // cards
-      L._cards = data.cards || {};
-      L.saveCards();
+      // cards — via the lexicon setter (direct L._cards assignment
+      // never reaches the module closure); strip any phrase cards
+      // the cloud copy may still carry (phrases live in PHRASES)
+      L.setCards(data.cards || {});
+      L.stripPhraseCards();
       // state (deep-merge settings so unknown fields keep defaults)
-      L._state = Object.assign({}, L.state(), data.state || {});
-      L._state.settings = Object.assign({}, L._state.settings, (data.state || {}).settings || {});
-      L.saveState();
-      // unfamiliar deck
+      L.setState(Object.assign({}, L.state(), data.state || {}));
+      // unfamiliar deck — drop multi-word flagged items too
       if (data.unfamiliar) {
-        try { localStorage.setItem("sls_unfamiliar", JSON.stringify(data.unfamiliar)); } catch (e) {}
+        const unf = {};
+        for (const k in data.unfamiliar) if (!String(k).includes(" ")) unf[k] = data.unfamiliar[k];
+        try { localStorage.setItem("sls_unfamiliar", JSON.stringify(unf)); } catch (e) {}
       }
       // custom lexicon entries
-      if (data.custom) { L._custom = data.custom; L.saveCustom(); }
+      if (data.custom) L.setCustom(data.custom);
       L.refresh();
       try { localStorage.setItem(LS_LAST, data.updatedAt || ""); } catch (e) {}
     },

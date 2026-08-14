@@ -408,8 +408,11 @@
       // 1) hot-zone words first — every flagged word enters the
       //    daily queue (studied or not), so weak words always get a
       //    chance to clear automatically (a GOOD/EASY answer
-      //    removes the flag; wrong answers keep it for tomorrow)
+      //    removes the flag; wrong answers keep it for tomorrow).
+      //    Multi-word phrases are skipped — they are not single
+      //    study words, they live in the PHRASES module.
       for (const key in Lexicon.getUnfamiliar()) {
+        if (Lexicon.isPhrase(key)) continue;
         const ent = Lexicon.get(key) || { w: key, t: "", us: "", uk: "", p: 2, d: "", e: "" };
         const card = Lexicon.getCard(key);
         queue.push({ key, ent, card, isNew: !card, hot: true });
@@ -418,6 +421,7 @@
       const due = Lexicon.dueCards();
       due.sort((a, b) => a.card.due - b.card.due);
       due.forEach((d) => {
+        if (Lexicon.isPhrase(d.key)) return;
         if (queue.some((t) => t.key === d.key)) return;
         queue.push({ key: d.key, ent: Lexicon.get(d.key), card: d.card, isNew: false, hot: false });
       });

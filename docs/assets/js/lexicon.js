@@ -188,6 +188,16 @@
       if (removed) this.saveCards();
       return removed;
     },
+    /* cloud apply must go through these setters — direct property
+     * assignment (L._cards = ...) never reaches the module closures
+     * that cards()/state()/getCustom() read */
+    setCards(map) { _cards = map || {}; this.saveCards(); },
+    setState(state) {
+      _state = Object.assign({}, DEFAULT_STATE, state || {});
+      _state.settings = Object.assign({}, DEFAULT_STATE.settings, (state || {}).settings || {});
+      this.saveState();
+    },
+    setCustom(map) { _custom = map || {}; this.saveCustom(); },
     saveCards() { writeLS(LS_CARDS, this.cards()); },
     cardCounts() {
       const cards = this.cards();
