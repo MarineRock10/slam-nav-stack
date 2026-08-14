@@ -176,6 +176,18 @@
       this.cards()[k] = state;
       this.saveCards();
     },
+    /* remove phrase cards left over from before the PHRASES module —
+     * multi-word collocations are no longer studied as single cards,
+     * their component words are (and already are) in the lexicon */
+    stripPhraseCards() {
+      const cards = this.cards();
+      let removed = 0;
+      for (const k in cards) {
+        if (k.includes(" ")) { delete cards[k]; removed++; }
+      }
+      if (removed) this.saveCards();
+      return removed;
+    },
     saveCards() { writeLS(LS_CARDS, this.cards()); },
     cardCounts() {
       const cards = this.cards();

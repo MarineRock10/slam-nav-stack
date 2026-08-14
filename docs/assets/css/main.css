@@ -1456,3 +1456,29 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   letter-spacing: 0.06em;
 }
 .ph-stats b { color: var(--fg-bright); font-size: var(--fs-sm); margin-left: 3px; }
+
+/* phrase component words (短语拆解) */
+.ph-comps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  margin: var(--sp-2) 0;
+  padding: var(--sp-1) var(--sp-2);
+  background: rgba(53, 200, 232, 0.06);
+  border: 1px dashed var(--cyan-dim, var(--border-bright));
+  border-radius: 3px;
+}
+.ph-comp { font-size: var(--fs-sm); }
+.ph-comp .spk-play { font-size: 10px; padding: 0 3px; }
+.ph-comp-plus { color: var(--fg-dim); font-size: var(--fs-sm); }
+.ph-comps-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: var(--sp-2);
+  color: var(--fg-dim);
+  font-size: 9px;
+}
+.ph-list-comp { display: inline-flex; align-items: center; }
+.ph-list-comp .spk-play { font-size: 9px; padding: 0 2px; border: none; }

@@ -43,6 +43,9 @@
     /* ================= init ================= */
     init() {
       Lexicon.load();
+      // legacy phrase cards (pre-PHRASES module) are dropped — phrases
+      // live in the PHRASES quiz now, their words are single cards
+      Lexicon.stripPhraseCards();
       CloudSync.init();
       CloudSync.onStatus = (msg) => this.setCloudStatus(msg);
       this.bindTabs();
@@ -1689,6 +1692,14 @@
       const q = this._logSearch.toLowerCase();
       const rows = [];
       Lexicon.load().forEach((ent, key) => {
+        // multi-word phrases live in the PHRASES module — the word
+        // library shows single words only (searching a phrase shows
+        // its component words instead)
+        if (Lexicon.isPhrase(key)) {
+          if (!q) return;
+          const hit = key.includes(q) || String(ent.t || "").includes(q);
+          if (!hit) return;
+        }
         if (q) {
           if (!ent.w.toLowerCase().includes(q) && !ent.t.toLowerCase().includes(q)) return;
         }
@@ -1706,10 +1717,11 @@
       this._logRows = rows;
 
       const total = Lexicon.size();
+      const wordTotal = total - Lexicon.phraseList().length;
       const counts = Lexicon.cardCounts();
-      $("lgCount").textContent = total.toLocaleString() + " ENTRIES";
+      $("lgCount").textContent = wordTotal.toLocaleString() + " WORDS · " + Lexicon.phraseList().length + " PHRASES";
       $("lgSummary").innerHTML =
-        "<span>DECK <b>" + total.toLocaleString() + "</b></span>" +
+        "<span>DECK <b>" + wordTotal.toLocaleString() + "</b></span>" +
         "<span>LEARNING <b>" + counts.learning + "</b></span>" +
         "<span>MATURE <b>" + counts.mature + "</b></span>" +
         "<span>DUE <b>" + counts.due + "</b></span>";
@@ -1915,17 +1927,27 @@
       const pages = Math.max(1, Math.ceil(rows.length / PER));
       if (this._phPage >= pages) this._phPage = pages - 1;
       const slice = rows.slice(this._phPage * PER, (this._phPage + 1) * PER);
-      $("phList").innerHTML = slice.map((p) =>
-        '<div class="log-row">' +
-        '<span class="log-word">' + this.esc(p.key) +
-        (p.ent.p === 0 ? ' <span class="core-star" title="CORE">★</span>' : "") + "</span>" +
-        '<span class="log-trans">' + this.esc(this.zhHead(p.key) || p.ent.t || p.ent.d || "") + "</span>" +
-        '<span class="log-state"><span class="' + (cards[p.key] ? "mature" : "new") + '">' +
-        (cards[p.key] ? "SEEN" : "NEW") + "</span>" +
-        '<button class="btn dk-btn" data-phquiz="' + this.esc(p.key) + '">QUIZ</button></span>' +
-        "</div>").join("") || '<div class="log-row"><span class="log-word">NO MATCHES</span></div>';
+      $("phList").innerHTML = slice.map((p) => {
+        // component words (拆解) — each is a single study word
+        const comps = p.key.split(" ").map((w) =>
+          '<span class="ph-list-comp">' + this.esc(w) +
+          (Lexicon.get(w) ? '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(w) + '">◉</button>' : "") +
+          "</span>").join("+");
+        return '<div class="log-row">' +
+          '<span class="log-word">' + this.esc(p.key) +
+          (p.ent.p === 0 ? ' <span class="core-star" title="CORE">★</span>' : "") + "</span>" +
+          '<span class="log-trans">' + this.esc(this.zhHead(p.key) || p.ent.t || p.ent.d || "") +
+          '<span class="ph-comps-inline">' + comps + "</span></span>" +
+          '<span class="log-state"><span class="' + (cards[p.key] ? "mature" : "new") + '">' +
+          (cards[p.key] ? "SEEN" : "NEW") + "</span>" +
+          '<button class="btn dk-btn" data-phquiz="' + this.esc(p.key) + '">QUIZ</button></span>' +
+          "</div>";
+      }).join("") || '<div class="log-row"><span class="log-word">NO MATCHES</span></div>';
       $("phList").querySelectorAll("[data-phquiz]").forEach((b) =>
         b.addEventListener("click", () => this.phraseQuiz([b.dataset.phquiz])));
+      // component-word play buttons (组成词发音)
+      $("phList").querySelectorAll(".spk-play").forEach((b) =>
+        b.addEventListener("click", () => this.speak(b.dataset.spk)));
       $("phPager").innerHTML =
         '<button class="btn" id="phPrev">◂ PREV</button>' +
         "<span>PAGE " + (this._phPage + 1) + " / " + pages + "</span>" +
@@ -1952,6 +1974,15 @@
       const qz = this._phQuiz;
       const item = qz.list[qz.idx];
       const zh = this.zhHead(item.key) || item.ent.t || item.ent.d || "";
+      // component words (拆解): every single word of the phrase is
+      // itself a study word — shown with its own gloss and play
+      const comps = item.key.split(" ").map((w) => {
+        const e = Lexicon.get(w);
+        const cz = e && (this.zhHead(w) || e.t || "");
+        return '<span class="spk-word ph-comp">' + this.esc(w) +
+          (e ? '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(w) + '">◉</button>' : "") +
+          (cz ? '<span class="spk-zh">' + this.esc(cz) + "</span>" : "") + "</span>";
+      }).join('<span class="ph-comp-plus">+</span>');
       // distractors: zh heads of other phrases (same tier first)
       const pool = this._shuffled(Lexicon.phraseList().filter((p) => p.key !== item.key));
       const opts = [zh];
@@ -1977,6 +2008,7 @@
         " · SCORE " + qz.score + "</span>" +
         '<span class="card-status learn">PHRASE RECOGNITION</span>' +
         '<div class="recognize-word">' + this.esc(item.key) + "</div>" +
+        '<div class="ph-comps">' + comps + "</div>" +
         (ent.d ? '<div class="card-sub" style="color:var(--fg-dim);font-size:12px">' + this.esc(ent.d) + "</div>" : "") +
         '<div class="recognize-opts" id="phOpts">' +
         opts.map((o, i) => '<button class="rec-opt" data-i="' + i + '"><span class="rec-key">' + (i + 1) + "</span>" +
@@ -2012,6 +2044,9 @@
         if (qz.idx >= qz.list.length) qz.done = true;
         this.renderPhrases();
       });
+      // component-word play buttons (组成词发音)
+      $("phQuiz").querySelectorAll(".spk-play").forEach((b) =>
+        b.addEventListener("click", () => this.speak(b.dataset.spk)));
     },
 
     renderPhraseResult() {
