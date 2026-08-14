@@ -1049,7 +1049,10 @@
       input.focus();
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") this.checkSpell();
-        else if (e.key === " ") { e.preventDefault(); this.speak(ent.w); }
+        // SPACE replays audio only while the field is empty — once
+        // typing (incl. multi-word phrases like "a number of") the
+        // space must be insertable, audio stays on the ◉ buttons
+        else if (e.key === " " && !input.value) { e.preventDefault(); this.speak(ent.w); }
       });
     },
 
@@ -1149,7 +1152,9 @@
       input.focus();
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") this.checkGap();
-        else if (e.key === " ") { e.preventDefault(); this.speakScene(sentence, sceneEl); }
+        // same rule as spelling: empty field = SPACE replays audio,
+        // typing (incl. phrases) = space inserts normally
+        else if (e.key === " " && !input.value) { e.preventDefault(); this.speakScene(sentence, sceneEl); }
       });
       $("btnBack").addEventListener("click", () => this.goBack());
       $("btnSkip").addEventListener("click", () => this.goNext());
