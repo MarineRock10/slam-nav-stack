@@ -67,7 +67,18 @@
 
     /* ================= cloud sync ================= */
     cloudInit() {
-      if (!CloudSync.enabled) {
+      // A fresh device has no localStorage (no token, no enable flag)
+      // yet — but the pull endpoint is a public raw URL, so we can
+      // still fetch the cloud copy automatically. Without this a new
+      // computer would show a blank deck and never know progress
+      // exists elsewhere.
+      const hasLocalData = (() => {
+        try {
+          const raw = localStorage.getItem("sls_cards");
+          return !!raw && Object.keys(JSON.parse(raw)).length > 0;
+        } catch (e) { return false; }
+      })();
+      if (!CloudSync.enabled && hasLocalData) {
         this.setCloudStatus("CLOUD SYNC OFF — ENABLE IT IN CONFIG");
         return;
       }
@@ -76,7 +87,8 @@
         if (r.ok) {
           this.renderAll();
           this.renderDeck();
-          this.setCloudStatus("SYNCED — CLOUD COPY LOADED (" + (r.at || "").slice(0, 10) + ")");
+          this.setCloudStatus("SYNCED — CLOUD COPY LOADED (" + (r.at || "").slice(0, 10) + ")" +
+            (CloudSync.token ? "" : " · CONFIG TOKEN TO PUSH CHANGES"));
         } else if (r.reason === "HTTP 404") {
           this.setCloudStatus("NO CLOUD COPY YET — SAVE CONFIG WITH AUTO SYNC ON TO SEED IT");
         } else {
