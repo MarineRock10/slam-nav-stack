@@ -286,6 +286,13 @@
       const hot = Object.keys(Lexicon.unfamiliarList()).length;
       tab.textContent = hot > 0 ? "VOCABULARY (" + hot + ")" : "VOCABULARY";
 
+      // ---- WRONG BOX stat card: wrong items + pending words queued
+      // for TRAIN, from every practice module (syn/tfng/phrases) ----
+      const wrongN = Lexicon.ppWrongList().length;
+      const pendN = Lexicon.ppPendingList().length;
+      $("stWrong").textContent = wrongN + pendN;
+      $("stWrongSub").textContent = "错题 " + wrongN + " · 生词 " + pendN + " 待学";
+
       // hot-zone quick row on the stats panel -> deck filtered to flagged words
       const hotWrap = $("stHotWrap");
       if (hotWrap) {
@@ -2009,9 +2016,9 @@
     phraseQuiz(keys) {
       const all = Lexicon.phraseList();
       const cards = Lexicon.cards();
-      const pick = keys || all
-        .filter((p) => !cards[p.key])
-        .concat(all.filter((p) => cards[p.key]));
+      const pick = keys
+        ? keys.map((k) => ({ key: k, ent: Lexicon.get(k) || {} }))
+        : all.filter((p) => !cards[p.key]).concat(all.filter((p) => cards[p.key]));
       if (!pick.length) return;
       this._phQuiz = { list: pick, idx: 0, score: 0, done: false, wrong: [] };
       this._phPage = 0;
@@ -2021,7 +2028,8 @@
     renderPhraseCard() {
       const qz = this._phQuiz;
       const item = qz.list[qz.idx];
-      const zh = this.zhHead(item.key) || item.ent.t || item.ent.d || "";
+      const ent = item.ent || Lexicon.get(item.key) || {};
+      const zh = this.zhHead(item.key) || ent.t || ent.d || "";
       // component words (拆解): every single word of the phrase is
       // itself a study word — shown with its own gloss and play
       const comps = item.key.split(" ").map((w) => {
@@ -2049,7 +2057,6 @@
         const t = opts[i]; opts[i] = opts[j]; opts[j] = t;
       }
       const ansIdx = opts.indexOf(zh);
-      const ent = item.ent;
       $("phQuiz").innerHTML =
         '<div class="card sense-card">' +
         '<span class="card-wp">PHRASE ' + (qz.idx + 1) + "/" + qz.list.length +
@@ -2101,6 +2108,17 @@
       const qz = this._phQuiz;
       const total = qz.list.length;
       const pct = total ? Math.round((qz.score / total) * 100) : 0;
+      // phrase misses join the same wrong box (review in REVIEW WRONG,
+      // answered correctly twice in a row clears); their component
+      // words queue into tomorrow's TRAIN when not yet learned
+      let pendingAdded = 0;
+      for (const key of qz.wrong) {
+        const ent = Lexicon.get(key) || {};
+        Lexicon.addPpWrong({ mode: "recognize", w: key, syns: [ent.t || ent.d || key] });
+        for (const w of String(key).split(/\s+/)) {
+          if (w.length > 2 && !STOPWORDS.has(w) && Lexicon.addPpPending(w)) pendingAdded++;
+        }
+      }
       $("phQuiz").innerHTML =
         '<div class="card sense-card">' +
         '<span class="card-wp">QUIZ COMPLETE</span>' +
@@ -2109,7 +2127,10 @@
         '<div class="sense-label">' + qz.score + " / " + total + " CORRECT (" + pct + "%)</div>" +
         (qz.wrong.length
           ? '<div class="log-summary" style="margin-top:var(--sp-2)">' +
-            qz.wrong.map((w) => '<span class="spk-word">' + this.esc(w) + "</span>").join("") + "</div>"
+            qz.wrong.map((w) => '<span class="spk-word">' + this.esc(w) + "</span>").join("") +
+            '<div class="sense-label" style="margin-top:var(--sp-1)">' +
+            (pendingAdded ? pendingAdded + " 个生词已加入明天 TRAIN 学习队列 · " : "") +
+            "错题已存入错题库 — REVIEW WRONG 再练</div></div>"
           : '<div class="sense-label">ALL CORRECT — PHRASES LOCKED IN ✓</div>') +
         '<div class="step-bar nav-bar"><button class="btn btn-primary" id="phRestart">↻ QUIZ AGAIN</button>' +
         '<button class="btn" id="phDone">DONE</button></div>' +
@@ -2138,6 +2159,19 @@
         '<span class="spk-sub">写草稿纸上 · 考前 3 天每天扫一遍</span></div>' +
         '<div class="pp-tips-grid">' + (P.tips || []).map((t) =>
           '<span class="pp-tip">' + this.esc(t) + "</span>").join("") + "</div>";
+
+      // quiz area — rendered FIRST so renderPpResult banks the wrong
+      // items before the wrong-answer bar below reads them
+      if (this._ppQuiz && !this._ppQuiz.done) {
+        this.renderPpCard();
+      } else if (this._ppQuiz && this._ppQuiz.done) {
+        this.renderPpResult();
+      } else {
+        $("ppQuiz").innerHTML =
+          '<div class="card"><div class="card-word" style="font-size:16px">PARAPHRASE DRILL</div>' +
+          '<div class="card-sub" style="color:var(--fg-dim);font-size:12px">' +
+          "SYNONYM QUIZ · 看词选同义 — T/F/NG DRILL · 原文 vs 题干定位判断</div></div>";
+      }
 
       // wrong-answer box (纠错机制) — always visible so it is easy
       // to find: an empty-state hint when there is nothing, counts +
@@ -2190,18 +2224,6 @@
         }
       }
 
-      // quiz area
-      if (this._ppQuiz && !this._ppQuiz.done) {
-        this.renderPpCard();
-      } else if (this._ppQuiz && this._ppQuiz.done) {
-        this.renderPpResult();
-      } else {
-        $("ppQuiz").innerHTML =
-          '<div class="card"><div class="card-word" style="font-size:16px">PARAPHRASE DRILL</div>' +
-          '<div class="card-sub" style="color:var(--fg-dim);font-size:12px">' +
-          "SYNONYM QUIZ · 看词选同义 — T/F/NG DRILL · 原文 vs 题干定位判断</div></div>";
-      }
-
       // grouped synonym tables
       $("ppSummary").innerHTML = P.groups.map((g) =>
         '<div class="spk-block">' +
@@ -2236,8 +2258,8 @@
         // review mode: wrong-answer box + pending words merged
         // (either can be non-empty on its own)
         const wrongItems = Lexicon.ppWrongList().map((w) => {
-          if (w.mode === "syn") return { key: w.key, mode: "syn", w: w.w, syns: w.syns };
-          return { key: w.key, mode: "tfng", src: w.src, q: w.q, ans: w.ans, why: w.why };
+          if (w.mode === "tfng") return { key: w.key, mode: "tfng", src: w.src, q: w.q, ans: w.ans, why: w.why };
+          return { key: w.key, mode: w.mode === "recognize" ? "recognize" : "syn", w: w.w, syns: w.syns };
         });
         const pendingItems = Lexicon.ppPendingList().map((word) => {
           const ent = Lexicon.get(word) || { w: word, t: "", us: "", uk: "", p: 2, d: "", e: "" };
@@ -2374,7 +2396,7 @@
           // clearing the box (two in a row removes the item); pending
           // words (key "pending:...") are cleared by studying them
           // in TRAIN, not by this drill
-          if (qz.mode === "wrong" && item.mode !== "recognize") {
+          if (qz.mode === "wrong" && item.key.indexOf("pending:") !== 0) {
             if (correct) Lexicon.markPpWrongOk(item.key);
             else Lexicon.markPpWrongFail(item.key);
           }

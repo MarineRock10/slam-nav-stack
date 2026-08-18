@@ -675,7 +675,9 @@
     savePpWrong(d) { writeLS("sls_pp_wrong", d); },
     addPpWrong(rec) {
       const d = this.getPpWrong();
-      const key = rec.mode === "syn" ? rec.w : "tfng:" + rec.q;
+      // syn/recognize items are keyed by their word (a phrase for
+      // recognize), tfng items by the statement text
+      const key = rec.mode === "tfng" ? "tfng:" + rec.q : rec.w;
       const prev = d[key];
       d[key] = Object.assign({}, rec, {
         fails: (prev ? prev.fails : 0) + 1,
