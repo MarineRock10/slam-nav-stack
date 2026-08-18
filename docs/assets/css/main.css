@@ -1570,3 +1570,18 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   letter-spacing: 0.1em;
 }
 .pp-wrong-bar .btn { margin-left: auto; }
+
+/* wrong box container — always visible (empty-state hint included) */
+.pp-wrong-box { min-height: 0; }
+.pp-wrong-empty { justify-content: flex-start; }
+
+/* cloud backup tag inside the wrong-answer bar */
+.pp-wrong-cloud {
+  margin-left: auto;
+  color: var(--cyan, #35c8e8);
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+.pp-wrong-cloud-off { color: var(--fg-dim); opacity: 0.7; }

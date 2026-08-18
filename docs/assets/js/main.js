@@ -33,6 +33,13 @@
   const $ = (id) => document.getElementById(id);
   const DAY = 86400000;
 
+  // function words — never injected into TRAIN from paraphrase misses
+  const STOPWORDS = new Set(("the a an and or but of in on at to for with by from as is are was were be been being " +
+    "have has had do does did will would can could shall should may might must this that these those it its they " +
+    "them their there here we our you your he his she her i my me not no nor so if then than too very just also " +
+    "because when while during about after before between into onto under over out up down off all any each every " +
+    "some such what which who whom whose how why where").split(" "));
+
   const App = {
     view: "stats",
     vsub: "train",       // vocab sub-view: train | deck | lexicon
@@ -2132,15 +2139,38 @@
         '<div class="pp-tips-grid">' + (P.tips || []).map((t) =>
           '<span class="pp-tip">' + this.esc(t) + "</span>").join("") + "</div>";
 
-      // wrong-answer box (纠错机制) — rendered into its own fixed
-      // container so re-renders overwrite instead of stacking; empty
-      // state takes no space at all
+      // wrong-answer box (纠错机制) — always visible so it is easy
+      // to find: an empty-state hint when there is nothing, counts +
+      // REVIEW WRONG button once there is; a cloud tag shows the
+      // backup state (wrong box + pending words sync to GitHub)
       const wrongList = Lexicon.ppWrongList();
       const pendingN = Lexicon.ppPendingList().length;
       const box = $("ppWrongBox");
       if (box) {
+        const cs = global.CloudSync;
+        let cloudTag = "";
+        if (cs) {
+          if (cs.enabled && cs.token) {
+            const ls = cs.lastSync();
+            const d = new Date(ls);
+            if (ls && !isNaN(d)) {
+              const pad = (n) => (n < 10 ? "0" + n : "" + n);
+              cloudTag = '<span class="pp-wrong-cloud" title="错题库 + 生词队列自动备份到 GitHub，换设备自动恢复">' +
+                "☁ 已存云端 · " + (d.getMonth() + 1) + "月" + d.getDate() + "日 " +
+                pad(d.getHours()) + ":" + pad(d.getMinutes()) + "</span>";
+            } else {
+              cloudTag = '<span class="pp-wrong-cloud">☁ 云备份开 · 待首次同步</span>';
+            }
+          } else {
+            cloudTag = '<span class="pp-wrong-cloud pp-wrong-cloud-off" title="在 CONFIG 中启用自动同步并配置 TOKEN 后，错题库会备份到 GitHub">' +
+              "☁ 云未开</span>";
+          }
+        }
         if (!wrongList.length && !pendingN) {
-          box.innerHTML = "";
+          box.innerHTML =
+            '<div class="pp-wrong-bar pp-wrong-empty">' +
+            '<span class="pp-wrong-tag">📌 错题库</span>' +
+            '<span>空 — 练习中答错的题会存到这里 · 生词进明天 TRAIN</span>' + cloudTag + "</div>";
         } else {
           const ok1 = wrongList.filter((w) => w.okStreak === 1).length;
           let status = '<div class="pp-wrong-bar">' +
@@ -2152,7 +2182,7 @@
           if (pendingN) {
             status += '<span><b>' + pendingN + "</b> 个生词待学</span>";
           }
-          status +=
+          status += cloudTag +
             '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button></div>';
           box.innerHTML = status;
           const wrongGo = $("ppWrongGo");
@@ -2380,7 +2410,11 @@
       // review mode — those already live there). For synonym misses
       // the real gap is often the word itself — queue the word and
       // its synonyms into tomorrow's TRAIN so they get the full
-      // MEANING→RECOGNIZE→SPELL→GAP flow.
+      // MEANING→RECOGNIZE→SPELL→GAP flow. T/F/NG judgement errors
+      // usually mean passage/statement vocabulary is unknown, so
+      // their key content words are queued the same way (lexicon
+      // entries first — they carry Chinese + phonetic; capped so a
+      // bad drill never floods the next session).
       let pendingAdded = 0;
       if (qz.mode !== "wrong") {
         for (const it of qz.wrong) {
@@ -2391,6 +2425,16 @@
             }
           } else {
             Lexicon.addPpWrong({ mode: "tfng", src: it.src, q: it.q, ans: it.ans, why: it.why });
+            const words = (it.src + " " + it.q).toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) || [];
+            const fresh = [...new Set(words.filter((w) => w.length > 2 && !STOPWORDS.has(w)))];
+            // known lexicon words first (full learning data), then unknowns
+            fresh.sort((a, b) => (Lexicon.get(b) ? 1 : 0) - (Lexicon.get(a) ? 1 : 0));
+            for (const w of fresh) {
+              if (Lexicon.addPpPending(w)) {
+                pendingAdded++;
+                if (pendingAdded >= 10) break;
+              }
+            }
           }
         }
       }
