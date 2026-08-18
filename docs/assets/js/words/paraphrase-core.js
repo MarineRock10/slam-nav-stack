@@ -1,0 +1,227 @@
+/* ============================================================
+ * slam-nav-stack :: paraphrase core (雅思阅读同义替换 · 必中版+拓展)
+ *
+ * High-frequency IELTS reading paraphrases distilled from real
+ * past papers (CORE = 必中, the rest = AI-extended coverage),
+ * plus a T/F/NG judgment drill that trains the core reading
+ * skill: find the word that looks different but means the same.
+ *
+ * Row formats:
+ *   groups[].pairs: [word, [synonyms...]]
+ *   tfng: { src, q, ans: "T"|"F"|"NG", why }
+ * ============================================================ */
+window.PARAPHRASE_CORE = {
+  groups: [
+    {
+      cat: "VERB",
+      label: "动词 · 最高频",
+      pairs: [
+        // ---- CORE 必中 ----
+        ["increase", ["rise", "grow"]],
+        ["decrease", ["drop", "fall", "decline"]],
+        ["change", ["alter", "shift"]],
+        ["build", ["construct", "create"]],
+        ["start", ["begin", "launch"]],
+        ["stop", ["cease", "end"]],
+        ["help", ["assist", "aid"]],
+        ["support", ["back", "be in favour of"]],
+        ["show", ["reveal", "indicate"]],
+        ["cause", ["lead to", "result in"]],
+        ["improve", ["enhance", "develop"]],
+        ["reduce", ["cut", "lower"]],
+        // ---- 拓展 ----
+        ["obtain", ["gain", "acquire"]],
+        ["need", ["require", "demand"]],
+        ["allow", ["permit", "enable"]],
+        ["prevent", ["stop", "avoid", "block"]],
+        ["discover", ["find", "uncover"]],
+        ["explain", ["account for"]],
+        ["consider", ["regard as", "view as"]],
+        ["produce", ["generate", "manufacture"]],
+        ["use", ["utilise", "employ"]],
+        ["affect", ["influence", "impact"]],
+        ["focus on", ["concentrate on"]],
+        ["rely on", ["depend on"]],
+        ["deal with", ["handle", "tackle"]],
+        ["face", ["confront", "encounter"]],
+        ["provide", ["supply", "offer"]],
+        ["suggest", ["propose", "indicate"]],
+        ["claim", ["argue", "assert"]],
+        ["approve", ["endorse", "support"]],
+        ["ban", ["prohibit", "forbid"]],
+        ["measure", ["assess", "evaluate"]],
+        ["predict", ["forecast", "anticipate"]],
+        ["attract", ["draw", "appeal to"]],
+        ["join", ["participate in", "take part in"]],
+        ["return", ["come back", "go back"]]
+      ]
+    },
+    {
+      cat: "NOUN",
+      label: "名词 · 最高频",
+      pairs: [
+        // ---- CORE 必中 ----
+        ["problem", ["issue", "challenge"]],
+        ["reason", ["factor", "cause"]],
+        ["advantage", ["benefit"]],
+        ["disadvantage", ["drawback"]],
+        ["shift", ["development", "movement"]],
+        ["cost", ["expense", "price"]],
+        ["time", ["period", "duration"]],
+        ["job", ["work", "employment"]],
+        ["study", ["research"]],
+        ["people", ["population", "individuals"]],
+        // ---- 拓展 ----
+        ["result", ["outcome", "consequence"]],
+        ["aim", ["goal", "purpose", "objective"]],
+        ["method", ["approach", "technique"]],
+        ["view", ["opinion", "perspective"]],
+        ["effect", ["impact", "influence"]],
+        ["requirement", ["demand", "necessity"]],
+        ["growth", ["expansion", "development"]],        ["amount", ["quantity"]],
+        ["part", ["portion", "section"]],
+        ["group", ["category", "class"]],
+        ["area", ["region", "zone"]],
+        ["difference", ["discrepancy", "gap"]],
+        ["speed", ["rate", "pace"]],
+        ["level", ["degree", "extent"]],
+        ["plan", ["scheme", "proposal"]],
+        ["law", ["regulation", "legislation"]],
+        ["money", ["funds", "capital"]],
+        ["place", ["location", "site"]],
+        ["intention", ["aim", "goal"]],
+        ["pollution", ["contamination"]],
+        ["damage", ["harm", "destruction"]],
+        ["danger", ["hazard", "risk"]],
+        ["shortage", ["lack", "scarcity"]],
+        ["rise", ["growth", "increase"]],
+        ["attempt", ["effort", "try"]],
+        ["choice", ["option", "alternative"]],
+        ["custom", ["tradition", "practice"]],
+        ["history", ["past", "background"]],
+        ["importance", ["significance", "value"]]
+      ]
+    },
+    {
+      cat: "ADJ",
+      label: "形容词 / 副词",
+      pairs: [
+        // ---- CORE 必中 ----
+        ["important", ["significant", "key", "crucial"]],
+        ["common", ["widespread", "frequent"]],
+        ["different", ["various", "diverse"]],
+        ["fast", ["rapid", "quick"]],
+        ["easy", ["simple", "straightforward"]],
+        ["difficult", ["tough", "complex"]],
+        ["old", ["ancient", "traditional"]],
+        ["new", ["modern", "recent"]],
+        // ---- 拓展 ----
+        ["big", ["large", "substantial"]],
+        ["small", ["tiny", "minor"]],
+        ["many", ["numerous", "a great deal of"]],
+        ["few", ["scarce", "rare"]],
+        ["good", ["beneficial", "positive"]],
+        ["bad", ["harmful", "negative"]],
+        ["serious", ["severe", "grave"]],
+        ["main", ["major", "primary", "principal"]],
+        ["whole", ["entire", "complete"]],
+        ["similar", ["comparable", "analogous"]],
+        ["likely", ["probable"]],
+        ["enough", ["sufficient", "adequate"]],
+        ["clear", ["evident", "obvious"]],
+        ["dangerous", ["hazardous", "risky"]],
+        ["useful", ["valuable", "beneficial"]],
+        ["popular", ["well-liked", "favoured"]],
+        ["expensive", ["costly", "pricey"]],
+        ["cheap", ["inexpensive", "affordable"]],
+        ["healthy", ["beneficial to health"]],
+        ["strong", ["powerful", "robust"]],
+        ["weak", ["fragile", "vulnerable"]],
+        ["young", ["juvenile", "youthful"]],
+        ["rich", ["wealthy", "affluent"]],
+        ["poor", ["impoverished", "needy"]],
+        ["wide", ["broad", "extensive"]],
+        ["narrow", ["restricted", "limited"]],
+        ["long", ["lengthy", "extended"]],
+        ["short", ["brief", "concise"]]
+      ]
+    },
+    {
+      cat: "LOGIC",
+      label: "逻辑信号词 · 判断题救命",
+      pairs: [
+        // ---- CORE 必中 ----
+        ["not", ["fail to", "hardly", "rarely"]],
+        ["all", ["every", "entire"]],
+        ["some", ["certain", "a number of"]],
+        ["only", ["solely", "just"]],
+        ["before", ["prior to"]],
+        ["after", ["following"]],
+        // ---- 拓展 ----
+        ["because", ["due to", "owing to", "since"]],
+        ["although", ["despite", "even though"]],
+        ["but", ["however", "nevertheless"]],
+        ["also", ["in addition", "moreover"]],
+        ["so", ["therefore", "thus", "consequently"]],
+        ["for example", ["for instance"]],
+        ["about", ["approximately", "roughly"]],
+        ["exactly", ["precisely"]],
+        ["most", ["the majority of"]],
+        ["rarely", ["seldom"]],
+        ["often", ["frequently"]],
+        ["always", ["consistently"]],
+        ["never", ["at no time"]],
+        ["immediately", ["at once", "right away"]],
+        ["finally", ["eventually", "ultimately"]],
+        ["at first", ["initially"]],
+        ["gradually", ["progressively", "steadily"]],
+        ["suddenly", ["abruptly"]],
+        ["mainly", ["primarily", "largely"]],
+        ["nearly", ["almost", "virtually"]],
+        ["both", ["as well as"]],
+        ["or", ["alternatively"]],
+        ["instead of", ["rather than"]],
+        ["in order to", ["so as to"]],
+        ["as a result", ["consequently", "therefore"]]
+      ]
+    }
+  ],
+  tfng: [
+    { src: "Most people walk.", q: "All people walk.", ans: "F", why: "all ≠ most — 范围扩大即反义" },
+    { src: "Most people walk.", q: "Some people cycle.", ans: "NG", why: "原文只提 walk，没提 cycle" },
+    { src: "Internet use has increased rapidly.", q: "Internet use has risen quickly.", ans: "T", why: "increase = rise · rapidly = quickly 全同义" },
+    { src: "The cost of housing is rising.", q: "The expense of housing is increasing.", ans: "T", why: "cost = expense · rise = increase 全同义" },
+    { src: "Some old buildings were destroyed.", q: "All old buildings were destroyed.", ans: "F", why: "some ≠ all — 范围扩大即反义" },
+    { src: "The government supports the plan.", q: "The government is in favour of the plan.", ans: "T", why: "support = be in favour of 同义" },
+    { src: "Fewer people read books now.", q: "Reading is becoming more common.", ans: "F", why: "fewer ≠ more — 反义" },
+    { src: "The change happened before 2000.", q: "The shift occurred prior to 2000.", ans: "T", why: "change = shift · before = prior to 全同义" },
+    { src: "The new method improved efficiency.", q: "The modern approach enhanced efficiency.", ans: "T", why: "new = modern · method = approach · improve = enhance 全同义" },
+    { src: "Children should learn to help others.", q: "Children must assist others.", ans: "NG", why: "原文 should（建议）≠ 题干 must（必须）— 程度被改，未否定学习，NG" },
+    { src: "Some animals are endangered.", q: "Only a few animals are endangered.", ans: "T", why: "some = a few 同义（范围一致）" },
+    { src: "The old bridge was built in 1900.", q: "The ancient bridge was constructed in 1900.", ans: "T", why: "old = ancient · build = construct 全同义" },
+    { src: "The research obtained significant results.", q: "The study gained important results.", ans: "T", why: "research = study · obtain = gain · significant = important 全同义" },
+    { src: "Few tourists visit the museum.", q: "A large number of tourists visit the museum.", ans: "F", why: "few ≠ a large number of — 反义" },
+    { src: "The government may ban the practice.", q: "The government prohibits the practice.", ans: "NG", why: "原文 may（可能）≠ 题干确定语气 — 程度被改，NG" },
+    { src: "Plants need water to grow.", q: "Plants require water to grow.", ans: "T", why: "need = require 同义" },
+    { src: "The area is mainly farmland.", q: "The region is primarily farmland.", ans: "T", why: "area = region · mainly = primarily 全同义" },
+    { src: "The process is extremely quick.", q: "The process is extremely slow.", ans: "F", why: "quick ≠ slow — 反义" },
+    { src: "The law was changed in 2010.", q: "The regulation was altered in 2010.", ans: "T", why: "law = regulation · change = alter 全同义" },
+    { src: "He reacted immediately.", q: "He reacted at once.", ans: "T", why: "immediately = at once 同义" },
+    { src: "The results were good.", q: "The results were beneficial.", ans: "T", why: "good = beneficial 同义" },
+    { src: "Some species are rare.", q: "All species are rare.", ans: "F", why: "some ≠ all — 范围扩大即反义" },
+    { src: "The method is difficult to master.", q: "The technique is complex to master.", ans: "T", why: "method = technique · difficult = complex 全同义" },
+    { src: "The accident caused many injuries.", q: "The accident led to a number of injuries.", ans: "T", why: "cause = lead to · many = a number of 全同义" },
+    { src: "Water pollution is a serious problem.", q: "Water contamination is a severe issue.", ans: "T", why: "pollution = contamination · serious = severe · problem = issue 全同义" },
+    { src: "The museum attracts thousands of visitors.", q: "The museum is visited by millions of people.", ans: "F", why: "thousands ≠ millions — 数字被改，反义" },
+    { src: "Students can use the library at any time.", q: "The library is open to staff only.", ans: "NG", why: "原文只提 students，没提 staff — NG" },
+    { src: "The town was founded in 1800.", q: "The town's history began in 1800.", ans: "T", why: "founded = history began 同义表达" }
+  ],
+  tips: [
+    "题干词 → 想替换 → 去原文扫",
+    "名词找名词 · 动词找动词 · 形容词找形容词",
+    "别翻译全文 — 只找「长得不一样但意思一样」",
+    "TRUE：同义词出现",
+    "FALSE：反义词出现（not / opposite / 范围扩大缩小 / 数字被改）",
+    "NOT GIVEN：完全没提 · 或程度被改（should≠must · may≠确定）"
+  ]
+};

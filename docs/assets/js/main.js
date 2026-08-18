@@ -127,13 +127,14 @@
     },
     showSub() {
       document.querySelectorAll(".sub-view").forEach((sec) => sec.classList.remove("active"));
-      const map = { train: "vocabTrain", deck: "vocabDeck", lexicon: "vocabLexicon", speaking: "vocabSpeaking", phrases: "vocabPhrases" };
+      const map = { train: "vocabTrain", deck: "vocabDeck", lexicon: "vocabLexicon", speaking: "vocabSpeaking", phrases: "vocabPhrases", paraphrase: "vocabParaphrase" };
       const el = $(map[this.vsub]);
       if (el) el.classList.add("active");
       if (this.vsub === "deck") this.renderDeck();
       if (this.vsub === "lexicon") this.renderLog();
       if (this.vsub === "speaking") this.renderSpeaking();
       if (this.vsub === "phrases") this.renderPhrases();
+      if (this.vsub === "paraphrase") this.renderParaphrase();
       if (this.vsub === "train" && !this.session) this.renderIdleConsole();
     },
 
@@ -2089,6 +2090,197 @@
         "</div>";
       $("phRestart").addEventListener("click", () => this.phraseQuiz(null));
       $("phDone").addEventListener("click", () => { this._phQuiz = null; this.renderPhrases(); });
+    },
+
+    /* ---- paraphrase core (雅思阅读同义替换) ----
+     * 口诀卡 + 四类替换表 + 两种练习：同义选择题（看词选同义）
+     * 和 T/F/NG 判断题（原文 vs 题干 → 判断）。纯练习，不写卡。 */
+    _ppQuiz: null,       // { mode: "syn"|"tfng", list, idx, score, done, wrong }
+
+    renderParaphrase() {
+      const P = global.PARAPHRASE_CORE || {};
+      const root = $("ppList");
+      if (!root || !P.groups) return;
+
+      // count pairs
+      const allPairs = P.groups.reduce((a, g) => a.concat(g.pairs), []);
+      $("ppCount").textContent = allPairs.length + " PAIRS · " + (P.tfng || []).length + " T/F/NG";
+
+      // tips (口诀)
+      $("ppTips").innerHTML =
+        '<div class="spk-head"><span class="spk-title">READING 口诀</span>' +
+        '<span class="spk-sub">写草稿纸上 · 考前 3 天每天扫一遍</span></div>' +
+        '<div class="pp-tips-grid">' + (P.tips || []).map((t) =>
+          '<span class="pp-tip">' + this.esc(t) + "</span>").join("") + "</div>";
+
+      // quiz area
+      if (this._ppQuiz && !this._ppQuiz.done) {
+        this.renderPpCard();
+      } else if (this._ppQuiz && this._ppQuiz.done) {
+        this.renderPpResult();
+      } else {
+        $("ppQuiz").innerHTML =
+          '<div class="card"><div class="card-word" style="font-size:16px">PARAPHRASE DRILL</div>' +
+          '<div class="card-sub" style="color:var(--fg-dim);font-size:12px">' +
+          "SYNONYM QUIZ · 看词选同义 — T/F/NG DRILL · 原文 vs 题干定位判断</div></div>";
+      }
+
+      // grouped synonym tables
+      $("ppSummary").innerHTML = P.groups.map((g) =>
+        '<div class="spk-block">' +
+        '<div class="spk-head"><span class="spk-title">' + this.esc(g.label) + "</span>" +
+        '<span class="spk-sub">' + g.pairs.length + " 组</span></div>" +
+        '<div class="pp-table">' + g.pairs.map(([w, syns]) =>
+          '<div class="pp-row"><span class="pp-word">' + this.esc(w) +
+          '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(w) + '">◉</button></span>' +
+          '<span class="pp-arrow">→</span>' +
+          '<span class="pp-syns">' + syns.map((s) =>
+            '<span class="pp-syn">' + this.esc(s) +
+            '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(s) + '">◉</button></span>').join("") +
+          "</span></div>").join("") + "</div></div>").join("");
+
+      // play buttons
+      $("ppSummary").querySelectorAll(".spk-play").forEach((b) =>
+        b.addEventListener("click", () => this.speak(b.dataset.spk)));
+
+      // quiz buttons
+      $("ppSynQuiz").addEventListener("click", () => this.ppQuiz("syn"));
+      $("ppTfngQuiz").addEventListener("click", () => this.ppQuiz("tfng"));
+    },
+
+    /* build a shuffled drill deck */
+    ppQuiz(mode) {
+      const P = global.PARAPHRASE_CORE || {};
+      if (mode === "syn") {
+        const pairs = P.groups.reduce((a, g) => a.concat(g.pairs), []);
+        const list = this._shuffled(pairs.map((p, i) => ({ i, w: p[0], syns: p[1] })));
+        this._ppQuiz = { mode, list, idx: 0, score: 0, done: false, wrong: [] };
+      } else {
+        const list = this._shuffled((P.tfng || []).map((t, i) => Object.assign({ i }, t)));
+        this._ppQuiz = { mode, list, idx: 0, score: 0, done: false, wrong: [] };
+      }
+      this.renderParaphrase();
+    },
+
+    renderPpCard() {
+      const qz = this._ppQuiz;
+      const item = qz.list[qz.idx];
+      const P = global.PARAPHRASE_CORE || {};
+      const play = (t) => '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(t) + '">◉</button>';
+
+      if (qz.mode === "syn") {
+        // 4-choice: pick the synonym of the shown word. Distractors
+        // come from the same POS group (similar words = harder, more
+        // useful), never from other groups with the same head word.
+        const g = P.groups.find((gr) => gr.pairs.some((p) => p[0] === item.w)) || P.groups[0];
+        const groupWords = g.pairs.map((p) => p[0]).filter((w) => w !== item.w);
+        const correct = item.syns[0];
+        const opts = [correct];
+        const seen = new Set([correct]);
+        const pool = this._shuffled(groupWords.length >= 3 ? groupWords : P.groups.reduce((a, x) => a.concat(x.pairs.map((p) => p[0])), []).filter((w) => w !== item.w));
+        for (const w of pool) {
+          if (seen.has(w)) continue;
+          seen.add(w);
+          opts.push(w);
+          if (opts.length >= 4) break;
+        }
+        for (let i = opts.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const t = opts[i]; opts[i] = opts[j]; opts[j] = t;
+        }
+        const ansIdx = opts.indexOf(correct);
+        $("ppQuiz").innerHTML =
+          '<div class="card sense-card">' +
+          '<span class="card-wp">SYNONYM ' + (qz.idx + 1) + "/" + qz.list.length + " · SCORE " + qz.score + "</span>" +
+          '<span class="card-status learn">PICK THE SYNONYM</span>' +
+          '<div class="recognize-word">' + this.esc(item.w) + play(item.w) + "</div>" +
+          '<div class="recognize-opts" id="ppOpts">' +
+          opts.map((o, i) => '<button class="rec-opt" data-i="' + i + '"><span class="rec-key">' + (i + 1) + "</span>" +
+            this.esc(o) + "</button>").join("") +
+          "</div>" +
+          '<div class="typing-feedback" id="ppFeedback"></div>' +
+          '<div class="step-bar nav-bar" id="ppNav" style="display:none">' +
+          '<button class="btn btn-primary" id="ppNext">NEXT ▸</button></div>' +
+          "</div>";
+        this._ppAns = ansIdx;
+        this._ppCorrect = correct;
+      } else {
+        // T/F/NG: judge the statement against the passage
+        $("ppQuiz").innerHTML =
+          '<div class="card sense-card">' +
+          '<span class="card-wp">T/F/NG ' + (qz.idx + 1) + "/" + qz.list.length + " · SCORE " + qz.score + "</span>" +
+          '<span class="card-status learn">JUDGE THE STATEMENT</span>' +
+          '<div class="sense-label">PASSAGE</div>' +
+          '<div class="pp-passage">' + this.esc(item.src) + play(item.src) + "</div>" +
+          '<div class="sense-label">STATEMENT</div>' +
+          '<div class="pp-statement">' + this.esc(item.q) + play(item.q) + "</div>" +
+          '<div class="recognize-opts" id="ppOpts">' +
+          ['<button class="rec-opt" data-i="0"><span class="rec-key">1</span>TRUE</button>',
+           '<button class="rec-opt" data-i="1"><span class="rec-key">2</span>FALSE</button>',
+           '<button class="rec-opt" data-i="2"><span class="rec-key">3</span>NOT GIVEN</button>'].join("") +
+          "</div>" +
+          '<div class="typing-feedback" id="ppFeedback"></div>' +
+          '<div class="step-bar nav-bar" id="ppNav" style="display:none">' +
+          '<button class="btn btn-primary" id="ppNext">NEXT ▸</button></div>' +
+          "</div>";
+        this._ppAns = { T: 0, F: 1, NG: 2 }[item.ans];
+        this._ppCorrect = item.ans;
+      }
+
+      const fb = $("ppFeedback");
+      const nav = $("ppNav");
+      const lock = () => {
+        $("ppOpts").querySelectorAll(".rec-opt").forEach((b) => (b.disabled = true));
+        nav.style.display = "flex";
+      };
+      $("ppOpts").querySelectorAll(".rec-opt").forEach((b) =>
+        b.addEventListener("click", () => {
+          if (fb.dataset.done) return;
+          fb.dataset.done = "1";
+          const i = parseInt(b.dataset.i, 10);
+          const correct = i === this._ppAns;
+          if (correct) qz.score++;
+          else qz.wrong.push(qz.mode === "syn" ? item.w : item.q);
+          $("ppOpts").querySelectorAll(".rec-opt").forEach((x, j) => {
+            x.classList.add(j === this._ppAns ? "rec-correct" : (j === i ? "rec-wrong" : "rec-dim"));
+          });
+          fb.className = "typing-feedback " + (correct ? "ok" : "err");
+          if (qz.mode === "syn") {
+            fb.textContent = correct ? "✓ " + item.w + " = " + this._ppCorrect
+              : "✗ — CORRECT: " + item.w + " = " + item.syns.join(" / ");
+          } else {
+            fb.textContent = (correct ? "✓ " : "✗ — 答案 ") + item.ans + " · " + item.why;
+          }
+          lock();
+        }));
+      $("ppNext").addEventListener("click", () => {
+        qz.idx++;
+        if (qz.idx >= qz.list.length) qz.done = true;
+        this.renderParaphrase();
+      });
+      $("ppQuiz").querySelectorAll(".spk-play").forEach((b) =>
+        b.addEventListener("click", () => this.speak(b.dataset.spk)));
+    },
+
+    renderPpResult() {
+      const qz = this._ppQuiz;
+      const total = qz.list.length;
+      const pct = total ? Math.round((qz.score / total) * 100) : 0;
+      $("ppQuiz").innerHTML =
+        '<div class="card sense-card">' +
+        '<span class="card-wp">DRILL COMPLETE</span>' +
+        '<span class="card-status ' + (pct >= 70 ? "mature" : pct >= 50 ? "learn" : "new") + '">' +
+        (pct >= 90 ? "EXCELLENT" : pct >= 70 ? "GOOD" : pct >= 50 ? "REVIEW NEEDED" : "WEAK") + "</span>" +
+        '<div class="sense-label">' + qz.score + " / " + total + " CORRECT (" + pct + "%)</div>" +
+        (qz.wrong.length
+          ? '<div class="log-summary" style="margin-top:var(--sp-2)">' +
+            qz.wrong.map((w) => '<span class="spk-word">' + this.esc(w) + "</span>").join("") + "</div>"
+          : '<div class="sense-label">ALL CORRECT — PARAPHRASES LOCKED IN ✓</div>') +
+        '<div class="step-bar nav-bar"><button class="btn btn-primary" id="ppRestart">↻ DRILL AGAIN</button>' +
+        '<button class="btn" id="ppDone">DONE</button></div>' +
+        "</div>";
+      $("ppRestart").addEventListener("click", () => this.ppQuiz(qz.mode));
+      $("ppDone").addEventListener("click", () => { this._ppQuiz = null; this.renderParaphrase(); });
     },
 
     doExport() {

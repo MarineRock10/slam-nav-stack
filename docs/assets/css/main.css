@@ -1482,3 +1482,66 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 }
 .ph-list-comp { display: inline-flex; align-items: center; }
 .ph-list-comp .spk-play { font-size: 9px; padding: 0 2px; border: none; }
+
+/* ---------------- paraphrase core (同义替换) ---------------- */
+.pp-tips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-2);
+}
+.pp-tip {
+  padding: var(--sp-1) var(--sp-2);
+  background: rgba(255, 183, 51, 0.08);
+  border: 1px solid var(--amber);
+  border-radius: 3px;
+  color: var(--amber);
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.05em;
+}
+.pp-table { display: flex; flex-direction: column; }
+.pp-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px dashed var(--border);
+  font-size: var(--fs-sm);
+}
+.pp-row:last-child { border-bottom: none; }
+.pp-word {
+  min-width: 110px;
+  color: var(--fg-bright);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.pp-arrow { color: var(--fg-dim); }
+.pp-syns {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  color: var(--cyan);
+}
+.pp-syn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.pp-syn .spk-play, .pp-word .spk-play {
+  font-size: 9px;
+  padding: 0 2px;
+  border: none;
+}
+.pp-passage, .pp-statement {
+  padding: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  background: var(--bg-panel2);
+  border: 1px solid var(--border-bright);
+  border-radius: 3px;
+  font-size: var(--fs-sm);
+  line-height: 1.7;
+}
+.pp-passage { border-left: 3px solid var(--amber); }
+.pp-statement { border-left: 3px solid var(--cyan); }
