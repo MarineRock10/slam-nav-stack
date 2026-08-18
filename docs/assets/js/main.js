@@ -950,6 +950,10 @@
       const g = Lexicon._cleanGloss ? Lexicon._cleanGloss(t.split(/[；;]/)[0]).replace(/^[a-z]+\.\s*/i, "").trim() :
         t.replace(/【[^】]*】/g, " ").split(/[；;]/)[0].replace(/^[a-z]+\.\s*/i, "").trim();
       if (g) return g;
+      // paraphrase-table fallback: head words missing from the lexicon
+      // (start/need/easy…) still get their Chinese meaning
+      const pzh = global.PARAPHRASE_CORE && global.PARAPHRASE_CORE.zh && global.PARAPHRASE_CORE.zh[key];
+      if (pzh) return pzh;
       if (ent && ent.d) {
         // skip self-referential definitions — they give the answer away
         const stem = Lexicon.stem(key);
@@ -2130,7 +2134,7 @@
 
       // wrong-answer box (纠错机制) — rendered into its own fixed
       // container so re-renders overwrite instead of stacking; empty
-      // state is a single unobtrusive line, not a banner
+      // state takes no space at all
       const wrongList = Lexicon.ppWrongList();
       const pendingN = Lexicon.ppPendingList().length;
       const box = $("ppWrongBox");
@@ -2139,14 +2143,18 @@
           box.innerHTML = "";
         } else {
           const ok1 = wrongList.filter((w) => w.okStreak === 1).length;
-          box.innerHTML =
-            '<div class="pp-wrong-bar">' +
-            '<span class="pp-wrong-tag">📌 错题库</span>' +
-            (wrongList.length ? '<span><b>' + wrongList.length + "</b> 题待复习" +
-              (ok1 ? " · " + ok1 + " 题答对 1 次（再对即清）" : "") + "</span>" : "") +
-            (pendingN ? '<span><b>' + pendingN + "</b> 个生词待学" : "") + "</span>" +
-            (wrongList.length ? '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button>' : "") +
-            "</div>";
+          let status = '<div class="pp-wrong-bar">' +
+            '<span class="pp-wrong-tag">📌 错题库</span>';
+          if (wrongList.length) {
+            status += '<span><b>' + wrongList.length + "</b> 题待复习" +
+              (ok1 ? " · " + ok1 + " 题答对 1 次（再对即清）" : "") + "</span>";
+          }
+          if (pendingN) {
+            status += '<span><b>' + pendingN + "</b> 个生词待学</span>";
+          }
+          status +=
+            '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button></div>';
+          box.innerHTML = status;
           const wrongGo = $("ppWrongGo");
           if (wrongGo) wrongGo.addEventListener("click", () => this.ppQuiz("wrong"));
         }
@@ -2195,8 +2203,17 @@
         const list = this._shuffled(pairs.map((p, i) => ({ i, w: p[0], syns: p[1] })));
         this._ppQuiz = { mode, list, idx: 0, score: 0, done: false, wrong: [] };
       } else if (mode === "wrong") {
-        // review mode: only the wrong-answer box, newest first
-        const list = this._shuffled(Lexicon.ppWrongList());
+        // review mode: wrong-answer box + pending words merged
+        // (either can be non-empty on its own)
+        const wrongItems = Lexicon.ppWrongList().map((w) => {
+          if (w.mode === "syn") return { key: w.key, mode: "syn", w: w.w, syns: w.syns };
+          return { key: w.key, mode: "tfng", src: w.src, q: w.q, ans: w.ans, why: w.why };
+        });
+        const pendingItems = Lexicon.ppPendingList().map((word) => {
+          const ent = Lexicon.get(word) || { w: word, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+          return { key: "pending:" + word, mode: "recognize", w: word, ent: ent };
+        });
+        const list = this._shuffled(wrongItems.concat(pendingItems));
         this._ppQuiz = { mode, list, idx: 0, score: 0, done: false, wrong: [] };
       } else {
         const list = this._shuffled((P.tfng || []).map((t, i) => Object.assign({ i }, t)));
@@ -2210,8 +2227,47 @@
       const item = qz.list[qz.idx];
       const P = global.PARAPHRASE_CORE || {};
       const play = (t) => '<button class="tts-btn spk-play" title="PLAY" data-spk="' + this.esc(t) + '">◉</button>';
+      // merged REVIEW WRONG quiz carries per-item modes
+      // (recognize / syn / tfng); plain quizzes use qz.mode
+      const mode = item.mode || qz.mode;
 
-      if (qz.mode === "syn") {
+      if (mode === "recognize") {
+        // pending-word review: pick the Chinese meaning of the shown
+        // word — this is exactly the gap behind a synonym miss
+        const zh = this.zhHead(item.w) || item.ent.t || "";
+        const opts = [zh];
+        const seen = new Set([zh]);
+        const pool = this._shuffled(Lexicon.load().keys());
+        for (const w of pool) {
+          if (w === item.w) continue;
+          const z = this.zhHead(w);
+          if (!z || seen.has(z)) continue;
+          if (z.length > 64) continue;
+          seen.add(z);
+          opts.push(z);
+          if (opts.length >= 4) break;
+        }
+        for (let i = opts.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const t = opts[i]; opts[i] = opts[j]; opts[j] = t;
+        }
+        const ansIdx = opts.indexOf(zh);
+        $("ppQuiz").innerHTML =
+          '<div class="card sense-card">' +
+          '<span class="card-wp">WORD ' + (qz.idx + 1) + "/" + qz.list.length + " · SCORE " + qz.score + "</span>" +
+          '<span class="card-status learn">PICK THE MEANING · 生词识别</span>' +
+          '<div class="recognize-word">' + this.esc(item.w) + play(item.w) + "</div>" +
+          '<div class="recognize-opts" id="ppOpts">' +
+          opts.map((o, i) => '<button class="rec-opt" data-i="' + i + '"><span class="rec-key">' + (i + 1) + "</span>" +
+            this.esc(o) + "</button>").join("") +
+          "</div>" +
+          '<div class="typing-feedback" id="ppFeedback"></div>' +
+          '<div class="step-bar nav-bar" id="ppNav" style="display:none">' +
+          '<button class="btn btn-primary" id="ppNext">NEXT ▸</button></div>' +
+          "</div>";
+        this._ppAns = ansIdx;
+        this._ppCorrect = zh;
+      } else if (mode === "syn") {
         // 4-choice: pick the synonym of the shown word. Distractors
         // come from the same POS group (similar words = harder, more
         // useful), never from other groups with the same head word.
@@ -2285,8 +2341,10 @@
           if (correct) qz.score++;
           else qz.wrong.push(item);
           // in the wrong-answer review drill a hit counts toward
-          // clearing the box (two in a row removes the item)
-          if (qz.mode === "wrong") {
+          // clearing the box (two in a row removes the item); pending
+          // words (key "pending:...") are cleared by studying them
+          // in TRAIN, not by this drill
+          if (qz.mode === "wrong" && item.mode !== "recognize") {
             if (correct) Lexicon.markPpWrongOk(item.key);
             else Lexicon.markPpWrongFail(item.key);
           }
@@ -2294,7 +2352,10 @@
             x.classList.add(j === this._ppAns ? "rec-correct" : (j === i ? "rec-wrong" : "rec-dim"));
           });
           fb.className = "typing-feedback " + (correct ? "ok" : "err");
-          if (qz.mode === "syn" || qz.mode === "wrong") {
+          if (mode === "recognize") {
+            fb.textContent = correct ? "✓ " + item.w + " = " + this._ppCorrect
+              : "✗ — 意思是: " + this._ppCorrect;
+          } else if (qz.mode === "syn" || qz.mode === "wrong") {
             fb.textContent = correct ? "✓ " + item.w + " = " + this._ppCorrect
               : "✗ — CORRECT: " + item.w + " = " + item.syns.join(" / ");
           } else {
@@ -2346,7 +2407,7 @@
               ? '<div class="sense-label" style="margin-top:var(--sp-1)">' +
                 (pendingAdded ? pendingAdded + " 个生词已加入明天 TRAIN 学习队列 · " : "") +
                 "错题已存入错题库 — REVIEW WRONG 明天再练</div>"
-              : "") +
+              : '<div class="sense-label" style="margin-top:var(--sp-1)">仍未掌握 — 错题保留，生词等 TRAIN 学习</div>') +
             "</div>"
           : '<div class="sense-label">ALL CORRECT — PARAPHRASES LOCKED IN ✓</div>') +
         '<div class="step-bar nav-bar"><button class="btn btn-primary" id="ppRestart">↻ DRILL AGAIN</button>' +
