@@ -2128,17 +2128,29 @@
         '<div class="pp-tips-grid">' + (P.tips || []).map((t) =>
           '<span class="pp-tip">' + this.esc(t) + "</span>").join("") + "</div>";
 
-      // wrong-answer box status (纠错机制)
+      // wrong-answer box (纠错机制) — rendered into its own fixed
+      // container so re-renders overwrite instead of stacking; empty
+      // state is a single unobtrusive line, not a banner
       const wrongList = Lexicon.ppWrongList();
       const pendingN = Lexicon.ppPendingList().length;
-      const wrongBar = wrongList.length
-        ? '<div class="pp-wrong-bar">' +
-          '<span>📌 错题库 <b>' + wrongList.length + "</b> 题待复习" +
-          (wrongList.filter((w) => w.okStreak === 1).length ? " · " + wrongList.filter((w) => w.okStreak === 1).length + " 题答对 1 次（再对 1 次即清）" : "") +
-          (pendingN ? " · <b>" + pendingN + "</b> 个生词已进明天 TRAIN" : "") +
-          "</span>" +
-          '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button></div>'
-        : '<div class="pp-wrong-bar pp-wrong-empty">📌 错题库空 — 练习中答错的题会存到这里，生词进明天 TRAIN</div>';
+      const box = $("ppWrongBox");
+      if (box) {
+        if (!wrongList.length && !pendingN) {
+          box.innerHTML = "";
+        } else {
+          const ok1 = wrongList.filter((w) => w.okStreak === 1).length;
+          box.innerHTML =
+            '<div class="pp-wrong-bar">' +
+            '<span class="pp-wrong-tag">📌 错题库</span>' +
+            (wrongList.length ? '<span><b>' + wrongList.length + "</b> 题待复习" +
+              (ok1 ? " · " + ok1 + " 题答对 1 次（再对即清）" : "") + "</span>" : "") +
+            (pendingN ? '<span><b>' + pendingN + "</b> 个生词待学" : "") + "</span>" +
+            (wrongList.length ? '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button>' : "") +
+            "</div>";
+          const wrongGo = $("ppWrongGo");
+          if (wrongGo) wrongGo.addEventListener("click", () => this.ppQuiz("wrong"));
+        }
+      }
 
       // quiz area
       if (this._ppQuiz && !this._ppQuiz.done) {
@@ -2151,9 +2163,6 @@
           '<div class="card-sub" style="color:var(--fg-dim);font-size:12px">' +
           "SYNONYM QUIZ · 看词选同义 — T/F/NG DRILL · 原文 vs 题干定位判断</div></div>";
       }
-      const wrongGo = $("ppWrongGo");
-      if (wrongGo) wrongGo.addEventListener("click", () => this.ppQuiz("wrong"));
-      $("ppTips").insertAdjacentHTML("afterend", wrongBar);
 
       // grouped synonym tables
       $("ppSummary").innerHTML = P.groups.map((g) =>

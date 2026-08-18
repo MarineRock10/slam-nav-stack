@@ -1546,14 +1546,14 @@ input.q-bad { border-color: var(--red); color: var(--red); }
 .pp-passage { border-left: 3px solid var(--amber); }
 .pp-statement { border-left: 3px solid var(--cyan); }
 
-/* paraphrase wrong-answer box (错题库) */
+/* wrong box container — fixed slot, renders only when non-empty */
+.pp-wrong-box { min-height: 0; }
 .pp-wrong-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--sp-2);
   margin-bottom: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-1) var(--sp-2);
   background: rgba(255, 82, 82, 0.08);
   border: 1px solid var(--red, #ff5252);
   border-radius: 3px;
@@ -1561,4 +1561,12 @@ input.q-bad { border-color: var(--red); color: var(--red); }
   font-size: var(--fs-sm);
 }
 .pp-wrong-bar b { color: var(--red, #ff5252); }
-.pp-wrong-empty { border-color: var(--border-bright); background: var(--bg-panel2); color: var(--fg-dim); }
+.pp-wrong-tag {
+  padding: 0 var(--sp-1);
+  border: 1px solid var(--red, #ff5252);
+  border-radius: 3px;
+  color: var(--red, #ff5252);
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.1em;
+}
+.pp-wrong-bar .btn { margin-left: auto; }
