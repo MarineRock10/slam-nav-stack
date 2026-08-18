@@ -94,17 +94,27 @@
         const data = await res.json();
         if (!data || !data.cards) return { ok: false, reason: "bad payload" };
         _applying = true;
-        try { this.apply(data); } finally { _applying = false; }
-        _lastSig = this._signature(data);
+        let cloudBehind = false;
+        try { cloudBehind = this.apply(data); } finally { _applying = false; }
+        if (cloudBehind) {
+          // local misses the cloud copy lacks (e.g. a refresh faster
+          // than the debounced push) — push the merged data back
+          _lastSig = null;
+          this.schedulePush();
+        } else {
+          _lastSig = this._signature(data);
+        }
         return { ok: true, at: data.updatedAt };
       } catch (e) {
         return { ok: false, reason: e.message };
       }
     },
 
+    /* returns true when the local copy has data the cloud lacks
+     * (wrong box / pending words are MERGED, never overwritten) */
     apply(data) {
       const L = global.Lexicon;
-      if (!L) return;
+      if (!L) return false;
       // cards — via the lexicon setter (direct L._cards assignment
       // never reaches the module closure); strip any phrase cards
       // the cloud copy may still carry (phrases live in PHRASES)
@@ -118,14 +128,23 @@
         for (const k in data.unfamiliar) if (!String(k).includes(" ")) unf[k] = data.unfamiliar[k];
         try { localStorage.setItem("sls_unfamiliar", JSON.stringify(unf)); } catch (e) {}
       }
-      // paraphrase wrong-answer box
-      if (data.ppWrong) L.savePpWrong(data.ppWrong);
-      // pending words from paraphrase mistakes
-      if (data.ppPending) L.savePpPending(data.ppPending);
+      // wrong box + pending queue: UNION merge — a cloud pull must
+      // never wipe local misses (quick refresh before the debounced
+      // push, failed push, etc.); local wins on same-key conflicts
+      let cloudBehind = false;
+      const w0 = data.ppWrong || {};
+      const p0 = data.ppPending || {};
+      const mergedW = Object.assign({}, w0, L.getPpWrong());
+      const mergedP = Object.assign({}, p0, L.getPpPending());
+      L.savePpWrong(mergedW);
+      L.savePpPending(mergedP);
+      if (JSON.stringify(mergedW) !== JSON.stringify(w0) ||
+          JSON.stringify(mergedP) !== JSON.stringify(p0)) cloudBehind = true;
       // custom lexicon entries
       if (data.custom) L.setCustom(data.custom);
       L.refresh();
       try { localStorage.setItem(LS_LAST, data.updatedAt || ""); } catch (e) {}
+      return cloudBehind;
     },
 
     /* ---- push: local wins, write to repo ---- */
