@@ -2086,7 +2086,13 @@
           const i = parseInt(b.dataset.i, 10);
           const correct = i === ansIdx;
           if (correct) qz.score++;
-          else qz.wrong.push(item.key);
+          else {
+            qz.wrong.push(item.key);
+            // bank the miss immediately (survives quitting mid-quiz)
+            // and refresh the wrong-answer bar if visible
+            this.bankPhraseWrong(item.key);
+            this.renderWrongBox();
+          }
           $("phOpts").querySelectorAll(".rec-opt").forEach((x, j) => {
             x.classList.add(j === ansIdx ? "rec-correct" : (j === i ? "rec-wrong" : "rec-dim"));
           });
@@ -2108,16 +2114,17 @@
       const qz = this._phQuiz;
       const total = qz.list.length;
       const pct = total ? Math.round((qz.score / total) * 100) : 0;
-      // phrase misses join the same wrong box (review in REVIEW WRONG,
-      // answered correctly twice in a row clears); their component
-      // words queue into tomorrow's TRAIN when not yet learned
+      // phrase misses are banked live by the answer handler; here we
+      // only re-bank anything that slipped through (defensive)
       let pendingAdded = 0;
+      this._phBanked = this._phBanked || new Set();
+      this._phPendAdd = this._phPendAdd || {};
       for (const key of qz.wrong) {
-        const ent = Lexicon.get(key) || {};
-        Lexicon.addPpWrong({ mode: "recognize", w: key, syns: [ent.t || ent.d || key] });
-        for (const w of String(key).split(/\s+/)) {
-          if (w.length > 2 && !STOPWORDS.has(w) && Lexicon.addPpPending(w)) pendingAdded++;
+        if (this._phBanked.has(key)) {
+          pendingAdded += this._phPendAdd[key] || 0;
+          continue;
         }
+        pendingAdded += this.bankPhraseWrong(key);
       }
       $("phQuiz").innerHTML =
         '<div class="card sense-card">' +
@@ -2173,56 +2180,9 @@
           "SYNONYM QUIZ · 看词选同义 — T/F/NG DRILL · 原文 vs 题干定位判断</div></div>";
       }
 
-      // wrong-answer box (纠错机制) — always visible so it is easy
-      // to find: an empty-state hint when there is nothing, counts +
-      // REVIEW WRONG button once there is; a cloud tag shows the
-      // backup state (wrong box + pending words sync to GitHub)
-      const wrongList = Lexicon.ppWrongList();
-      const pendingN = Lexicon.ppPendingList().length;
-      const box = $("ppWrongBox");
-      if (box) {
-        const cs = global.CloudSync;
-        let cloudTag = "";
-        if (cs) {
-          if (cs.enabled && cs.token) {
-            const ls = cs.lastSync();
-            const d = new Date(ls);
-            if (ls && !isNaN(d)) {
-              const pad = (n) => (n < 10 ? "0" + n : "" + n);
-              cloudTag = '<span class="pp-wrong-cloud" title="错题库 + 生词队列自动备份到 GitHub，换设备自动恢复">' +
-                "☁ 已存云端 · " + (d.getMonth() + 1) + "月" + d.getDate() + "日 " +
-                pad(d.getHours()) + ":" + pad(d.getMinutes()) + "</span>";
-            } else {
-              cloudTag = '<span class="pp-wrong-cloud">☁ 云备份开 · 待首次同步</span>';
-            }
-          } else {
-            cloudTag = '<span class="pp-wrong-cloud pp-wrong-cloud-off" title="在 CONFIG 中启用自动同步并配置 TOKEN 后，错题库会备份到 GitHub">' +
-              "☁ 云未开</span>";
-          }
-        }
-        if (!wrongList.length && !pendingN) {
-          box.innerHTML =
-            '<div class="pp-wrong-bar pp-wrong-empty">' +
-            '<span class="pp-wrong-tag">📌 错题库</span>' +
-            '<span>空 — 练习中答错的题会存到这里 · 生词进明天 TRAIN</span>' + cloudTag + "</div>";
-        } else {
-          const ok1 = wrongList.filter((w) => w.okStreak === 1).length;
-          let status = '<div class="pp-wrong-bar">' +
-            '<span class="pp-wrong-tag">📌 错题库</span>';
-          if (wrongList.length) {
-            status += '<span><b>' + wrongList.length + "</b> 题待复习" +
-              (ok1 ? " · " + ok1 + " 题答对 1 次（再对即清）" : "") + "</span>";
-          }
-          if (pendingN) {
-            status += '<span><b>' + pendingN + "</b> 个生词待学</span>";
-          }
-          status += cloudTag +
-            '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button></div>';
-          box.innerHTML = status;
-          const wrongGo = $("ppWrongGo");
-          if (wrongGo) wrongGo.addEventListener("click", () => this.ppQuiz("wrong"));
-        }
-      }
+      // wrong-answer bar — always visible; rendered live so a miss
+      // shows up the instant it happens (see renderWrongBox)
+      this.renderWrongBox();
 
       // grouped synonym tables
       $("ppSummary").innerHTML = P.groups.map((g) =>
@@ -2245,6 +2205,111 @@
       // quiz buttons
       $("ppSynQuiz").addEventListener("click", () => this.ppQuiz("syn"));
       $("ppTfngQuiz").addEventListener("click", () => this.ppQuiz("tfng"));
+    },
+
+    /* ---- wrong-answer bar (纠错机制) ----
+     * Always visible (empty-state hint when clear). Refreshed live so
+     * a miss appears the moment it happens — no need to finish the
+     * drill. A cloud tag shows the backup state (wrong box + pending
+     * words sync to GitHub). */
+    renderWrongBox() {
+      const wrongList = Lexicon.ppWrongList();
+      const pendingN = Lexicon.ppPendingList().length;
+      const box = $("ppWrongBox");
+      if (!box) return;
+      const cs = global.CloudSync;
+      let cloudTag = "";
+      if (cs) {
+        if (cs.enabled && cs.token) {
+          const ls = cs.lastSync();
+          const d = new Date(ls);
+          if (ls && !isNaN(d)) {
+            const pad = (n) => (n < 10 ? "0" + n : "" + n);
+            cloudTag = '<span class="pp-wrong-cloud" title="错题库 + 生词队列自动备份到 GitHub，换设备自动恢复">' +
+              "☁ 已存云端 · " + (d.getMonth() + 1) + "月" + d.getDate() + "日 " +
+              pad(d.getHours()) + ":" + pad(d.getMinutes()) + "</span>";
+          } else {
+            cloudTag = '<span class="pp-wrong-cloud">☁ 云备份开 · 待首次同步</span>';
+          }
+        } else {
+          cloudTag = '<span class="pp-wrong-cloud pp-wrong-cloud-off" title="在 CONFIG 中启用自动同步并配置 TOKEN 后，错题库会备份到 GitHub">' +
+            "☁ 云未开</span>";
+        }
+      }
+      if (!wrongList.length && !pendingN) {
+        box.innerHTML =
+          '<div class="pp-wrong-bar pp-wrong-empty">' +
+          '<span class="pp-wrong-tag">📌 错题库</span>' +
+          '<span>空 — 练习中答错的题会存到这里 · 生词进明天 TRAIN</span>' + cloudTag + "</div>";
+      } else {
+        const ok1 = wrongList.filter((w) => w.okStreak === 1).length;
+        let status = '<div class="pp-wrong-bar">' +
+          '<span class="pp-wrong-tag">📌 错题库</span>';
+        if (wrongList.length) {
+          status += '<span><b>' + wrongList.length + "</b> 题待复习" +
+            (ok1 ? " · " + ok1 + " 题答对 1 次（再对即清）" : "") + "</span>";
+        }
+        if (pendingN) {
+          status += '<span><b>' + pendingN + "</b> 个生词待学</span>";
+        }
+        status += cloudTag +
+          '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button></div>';
+        box.innerHTML = status;
+        const wrongGo = $("ppWrongGo");
+        if (wrongGo) wrongGo.addEventListener("click", () => this.ppQuiz("wrong"));
+      }
+    },
+
+    /* ---- bank a wrong answer immediately ----
+     * Persists to localStorage the moment the learner misses, so a
+     * mid-drill quit never loses it. item._banked guards against the
+     * result screen re-banking the same miss. Synonym misses queue
+     * the word + its synonyms into TRAIN; T/F/NG misses queue up to
+     * 3 unknown content words from the passage/statement (lexicon
+     * entries first — they carry Chinese + phonetic). */
+    bankPpWrong(item, mode) {
+      if (item._banked) return 0;
+      item._banked = true;
+      let added = 0;
+      if (mode === "syn") {
+        Lexicon.addPpWrong({ mode: "syn", w: item.w, syns: item.syns });
+        for (const w of [item.w].concat(item.syns)) {
+          if (Lexicon.addPpPending(w)) added++;
+        }
+      } else if (mode === "tfng") {
+        Lexicon.addPpWrong({ mode: "tfng", src: item.src, q: item.q, ans: item.ans, why: item.why });
+        // cap the pending queue so a catastrophically bad drill can
+        // never flood TRAIN; it drains as words get learned
+        if (Lexicon.ppPendingList().length < 40) {
+          const words = (item.src + " " + item.q).toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) || [];
+          const fresh = [...new Set(words.filter((w) => w.length > 2 && !STOPWORDS.has(w)))];
+          fresh.sort((a, b) => (Lexicon.get(b) ? 1 : 0) - (Lexicon.get(a) ? 1 : 0));
+          for (const w of fresh) {
+            if (Lexicon.addPpPending(w)) {
+              added++;
+              if (added >= 3) break;
+            }
+          }
+        }
+      }
+      item._pendAdd = added;
+      return added;
+    },
+
+    /* phrase misses: the phrase itself joins the wrong box (reviewed
+     * in recognize mode), its component words queue into TRAIN */
+    bankPhraseWrong(key) {
+      const ent = Lexicon.get(key) || {};
+      Lexicon.addPpWrong({ mode: "recognize", w: key, syns: [ent.t || ent.d || key] });
+      let added = 0;
+      for (const w of String(key).split(/\s+/)) {
+        if (w.length > 2 && !STOPWORDS.has(w) && Lexicon.addPpPending(w)) added++;
+      }
+      this._phBanked = this._phBanked || new Set();
+      this._phBanked.add(key);
+      this._phPendAdd = this._phPendAdd || {};
+      this._phPendAdd[key] = added;
+      return added;
     },
 
     /* build a shuffled drill deck */
@@ -2391,7 +2456,15 @@
           const i = parseInt(b.dataset.i, 10);
           const correct = i === this._ppAns;
           if (correct) qz.score++;
-          else qz.wrong.push(item);
+          else {
+            qz.wrong.push(item);
+            // bank the miss immediately (persists even if the drill
+            // is quit midway) and refresh the wrong-answer bar
+            if (qz.mode === "syn" || qz.mode === "tfng") {
+              this.bankPpWrong(item, qz.mode);
+              this.renderWrongBox();
+            }
+          }
           // in the wrong-answer review drill a hit counts toward
           // clearing the box (two in a row removes the item); pending
           // words (key "pending:...") are cleared by studying them
@@ -2428,36 +2501,17 @@
       const qz = this._ppQuiz;
       const total = qz.list.length;
       const pct = total ? Math.round((qz.score / total) * 100) : 0;
-      // bank the wrong items into the wrong-answer box (not in the
-      // review mode — those already live there). For synonym misses
-      // the real gap is often the word itself — queue the word and
-      // its synonyms into tomorrow's TRAIN so they get the full
-      // MEANING→RECOGNIZE→SPELL→GAP flow. T/F/NG judgement errors
-      // usually mean passage/statement vocabulary is unknown, so
-      // their key content words are queued the same way (lexicon
-      // entries first — they carry Chinese + phonetic; capped so a
-      // bad drill never floods the next session).
+      // wrong answers are already banked live by the answer handler
+      // (so quitting mid-drill never loses them) — here we only
+      // re-bank anything that slipped through (defensive)
       let pendingAdded = 0;
       if (qz.mode !== "wrong") {
         for (const it of qz.wrong) {
-          if (qz.mode === "syn") {
-            Lexicon.addPpWrong({ mode: "syn", w: it.w, syns: it.syns });
-            for (const w of [it.w].concat(it.syns)) {
-              if (Lexicon.addPpPending(w)) pendingAdded++;
-            }
-          } else {
-            Lexicon.addPpWrong({ mode: "tfng", src: it.src, q: it.q, ans: it.ans, why: it.why });
-            const words = (it.src + " " + it.q).toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) || [];
-            const fresh = [...new Set(words.filter((w) => w.length > 2 && !STOPWORDS.has(w)))];
-            // known lexicon words first (full learning data), then unknowns
-            fresh.sort((a, b) => (Lexicon.get(b) ? 1 : 0) - (Lexicon.get(a) ? 1 : 0));
-            for (const w of fresh) {
-              if (Lexicon.addPpPending(w)) {
-                pendingAdded++;
-                if (pendingAdded >= 10) break;
-              }
-            }
+          if (it._banked) {
+            pendingAdded += it._pendAdd || 0;
+            continue;
           }
+          pendingAdded += this.bankPpWrong(it, qz.mode);
         }
       }
       $("ppQuiz").innerHTML =
