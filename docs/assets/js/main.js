@@ -430,6 +430,17 @@
         const card = Lexicon.getCard(key);
         queue.push({ key, ent, card, isNew: !card, hot: true });
       }
+      // 1.5) pending words from paraphrase mistakes — they enter
+      //      today's TRAIN as full new-word cards (capped so they
+      //      never flood the session), then leave the box when
+      //      studied (applyGrade removes them)
+      if (!reviewOnly) {
+        for (const key of Lexicon.ppPendingList().slice(0, 10)) {
+          if (queue.some((t) => t.key === key)) continue;
+          const ent = Lexicon.get(key) || { w: key, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+          queue.push({ key, ent, card: null, isNew: true, hot: false, pending: true });
+        }
+      }
       // 2) due reviews, then by due time
       const due = Lexicon.dueCards();
       due.sort((a, b) => a.card.due - b.card.due);
@@ -1408,6 +1419,10 @@
       if (q >= 2 && Lexicon.isUnfamiliar(item.key)) {
         Lexicon.removeUnfamiliar(item.key);
       }
+      // a pending word from the paraphrase mistakes box that was
+      // answered at least HARD (q>=1) is now a real card — leave the
+      // pending box (AGAIN keeps it there for the next session)
+      if (q >= 1 && item.pending) Lexicon.removePpPending(item.key);
       Lexicon.setCard(item.key, updated);
       if (q === 0) s.failed++;
       else if (item.isNew) s.newDone++;
@@ -2115,13 +2130,15 @@
 
       // wrong-answer box status (纠错机制)
       const wrongList = Lexicon.ppWrongList();
+      const pendingN = Lexicon.ppPendingList().length;
       const wrongBar = wrongList.length
         ? '<div class="pp-wrong-bar">' +
           '<span>📌 错题库 <b>' + wrongList.length + "</b> 题待复习" +
           (wrongList.filter((w) => w.okStreak === 1).length ? " · " + wrongList.filter((w) => w.okStreak === 1).length + " 题答对 1 次（再对 1 次即清）" : "") +
+          (pendingN ? " · <b>" + pendingN + "</b> 个生词已进明天 TRAIN" : "") +
           "</span>" +
           '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button></div>'
-        : '<div class="pp-wrong-bar pp-wrong-empty">📌 错题库空 — 练习中答错的题会存到这里，第二天复习</div>';
+        : '<div class="pp-wrong-bar pp-wrong-empty">📌 错题库空 — 练习中答错的题会存到这里，生词进明天 TRAIN</div>';
 
       // quiz area
       if (this._ppQuiz && !this._ppQuiz.done) {
@@ -2290,11 +2307,18 @@
       const total = qz.list.length;
       const pct = total ? Math.round((qz.score / total) * 100) : 0;
       // bank the wrong items into the wrong-answer box (not in the
-      // review mode — those already live there)
+      // review mode — those already live there). For synonym misses
+      // the real gap is often the word itself — queue the word and
+      // its synonyms into tomorrow's TRAIN so they get the full
+      // MEANING→RECOGNIZE→SPELL→GAP flow.
+      let pendingAdded = 0;
       if (qz.mode !== "wrong") {
         for (const it of qz.wrong) {
           if (qz.mode === "syn") {
             Lexicon.addPpWrong({ mode: "syn", w: it.w, syns: it.syns });
+            for (const w of [it.w].concat(it.syns)) {
+              if (Lexicon.addPpPending(w)) pendingAdded++;
+            }
           } else {
             Lexicon.addPpWrong({ mode: "tfng", src: it.src, q: it.q, ans: it.ans, why: it.why });
           }
@@ -2309,7 +2333,11 @@
         (qz.wrong.length
           ? '<div class="log-summary" style="margin-top:var(--sp-2)">' +
             qz.wrong.map((w) => '<span class="spk-word">' + this.esc(qz.mode === "syn" ? w.w : w.q) + "</span>").join("") +
-            (qz.mode !== "wrong" ? '<div class="sense-label" style="margin-top:var(--sp-1)">已存入错题库 — 明天 REVIEW WRONG 再练</div>' : "") +
+            (qz.mode !== "wrong"
+              ? '<div class="sense-label" style="margin-top:var(--sp-1)">' +
+                (pendingAdded ? pendingAdded + " 个生词已加入明天 TRAIN 学习队列 · " : "") +
+                "错题已存入错题库 — REVIEW WRONG 明天再练</div>"
+              : "") +
             "</div>"
           : '<div class="sense-label">ALL CORRECT — PARAPHRASES LOCKED IN ✓</div>') +
         '<div class="step-bar nav-bar"><button class="btn btn-primary" id="ppRestart">↻ DRILL AGAIN</button>' +

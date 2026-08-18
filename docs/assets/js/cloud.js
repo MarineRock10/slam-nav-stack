@@ -15,7 +15,7 @@
   const LS_TOKEN = "sls_cloud_token";
   const LS_ENABLED = "sls_cloud_enabled";
   const LS_LAST = "sls_cloud_last";
-  const PATCH_KEYS = ["sls_cards", "sls_state", "sls_custom", "sls_unfamiliar", "sls_pp_wrong"];
+  const PATCH_KEYS = ["sls_cards", "sls_state", "sls_custom", "sls_unfamiliar", "sls_pp_wrong", "sls_pp_pending"];
 
   let _applying = false;   // suppress echo pushes while applying a pull
   let _hooked = false;
@@ -73,6 +73,7 @@
         state: global.Lexicon ? Lexicon.state() : null,
         unfamiliar: global.Lexicon ? Lexicon.getUnfamiliar() : {},
         ppWrong: global.Lexicon ? Lexicon.getPpWrong() : {},
+        ppPending: global.Lexicon ? Lexicon.getPpPending() : {},
         custom: global.Lexicon ? Lexicon.getCustom() : {}
       };
     },
@@ -81,7 +82,7 @@
     _signature(data) {
       return JSON.stringify({
         cards: data.cards, state: data.state, unfamiliar: data.unfamiliar,
-        ppWrong: data.ppWrong, custom: data.custom
+        ppWrong: data.ppWrong, ppPending: data.ppPending, custom: data.custom
       });
     },
 
@@ -119,6 +120,8 @@
       }
       // paraphrase wrong-answer box
       if (data.ppWrong) L.savePpWrong(data.ppWrong);
+      // pending words from paraphrase mistakes
+      if (data.ppPending) L.savePpPending(data.ppPending);
       // custom lexicon entries
       if (data.custom) L.setCustom(data.custom);
       L.refresh();

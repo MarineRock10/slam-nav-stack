@@ -711,6 +711,35 @@
         .sort((a, b) => (a.at || 0) - (b.at || 0));
     },
 
+    /* ---- pending words from paraphrase mistakes (错题生词) ----
+     * When a synonym drill is answered wrong the real problem is
+     * often that the word itself is unknown. Those words go into
+     * this box and are inserted into the next day's TRAIN queue
+     * (full MEANING→RECOGNIZE→SPELL→GAP flow); a word leaves the
+     * box once it has a card. */
+    getPpPending() {
+      return readLS("sls_pp_pending", {});
+    },
+    savePpPending(d) { writeLS("sls_pp_pending", d); },
+    addPpPending(word) {
+      const w = String(word || "").toLowerCase().trim();
+      if (!w || this.isPhrase(w)) return false;   // no phrases, no blanks
+      if (this.getCard(w)) return false;          // already learned
+      const d = this.getPpPending();
+      if (d[w]) return false;                     // already queued
+      d[w] = Date.now();
+      this.savePpPending(d);
+      return true;
+    },
+    removePpPending(word) {
+      const d = this.getPpPending();
+      if (d[word]) { delete d[word]; this.savePpPending(d); }
+    },
+    ppPendingList() {
+      const d = this.getPpPending();
+      return Object.keys(d).sort((a, b) => d[a] - d[b]);
+    },
+
     /* ---- study history / streak ---- */
     logStudy(newCount, reviewCount, practiceCount) {
       const st = this.state().stats;
