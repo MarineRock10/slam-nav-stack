@@ -2113,6 +2113,16 @@
         '<div class="pp-tips-grid">' + (P.tips || []).map((t) =>
           '<span class="pp-tip">' + this.esc(t) + "</span>").join("") + "</div>";
 
+      // wrong-answer box status (纠错机制)
+      const wrongList = Lexicon.ppWrongList();
+      const wrongBar = wrongList.length
+        ? '<div class="pp-wrong-bar">' +
+          '<span>📌 错题库 <b>' + wrongList.length + "</b> 题待复习" +
+          (wrongList.filter((w) => w.okStreak === 1).length ? " · " + wrongList.filter((w) => w.okStreak === 1).length + " 题答对 1 次（再对 1 次即清）" : "") +
+          "</span>" +
+          '<button class="btn btn-primary" id="ppWrongGo">REVIEW WRONG ▸</button></div>'
+        : '<div class="pp-wrong-bar pp-wrong-empty">📌 错题库空 — 练习中答错的题会存到这里，第二天复习</div>';
+
       // quiz area
       if (this._ppQuiz && !this._ppQuiz.done) {
         this.renderPpCard();
@@ -2124,6 +2134,9 @@
           '<div class="card-sub" style="color:var(--fg-dim);font-size:12px">' +
           "SYNONYM QUIZ · 看词选同义 — T/F/NG DRILL · 原文 vs 题干定位判断</div></div>";
       }
+      const wrongGo = $("ppWrongGo");
+      if (wrongGo) wrongGo.addEventListener("click", () => this.ppQuiz("wrong"));
+      $("ppTips").insertAdjacentHTML("afterend", wrongBar);
 
       // grouped synonym tables
       $("ppSummary").innerHTML = P.groups.map((g) =>
@@ -2154,6 +2167,10 @@
       if (mode === "syn") {
         const pairs = P.groups.reduce((a, g) => a.concat(g.pairs), []);
         const list = this._shuffled(pairs.map((p, i) => ({ i, w: p[0], syns: p[1] })));
+        this._ppQuiz = { mode, list, idx: 0, score: 0, done: false, wrong: [] };
+      } else if (mode === "wrong") {
+        // review mode: only the wrong-answer box, newest first
+        const list = this._shuffled(Lexicon.ppWrongList());
         this._ppQuiz = { mode, list, idx: 0, score: 0, done: false, wrong: [] };
       } else {
         const list = this._shuffled((P.tfng || []).map((t, i) => Object.assign({ i }, t)));
@@ -2240,12 +2257,18 @@
           const i = parseInt(b.dataset.i, 10);
           const correct = i === this._ppAns;
           if (correct) qz.score++;
-          else qz.wrong.push(qz.mode === "syn" ? item.w : item.q);
+          else qz.wrong.push(item);
+          // in the wrong-answer review drill a hit counts toward
+          // clearing the box (two in a row removes the item)
+          if (qz.mode === "wrong") {
+            if (correct) Lexicon.markPpWrongOk(item.key);
+            else Lexicon.markPpWrongFail(item.key);
+          }
           $("ppOpts").querySelectorAll(".rec-opt").forEach((x, j) => {
             x.classList.add(j === this._ppAns ? "rec-correct" : (j === i ? "rec-wrong" : "rec-dim"));
           });
           fb.className = "typing-feedback " + (correct ? "ok" : "err");
-          if (qz.mode === "syn") {
+          if (qz.mode === "syn" || qz.mode === "wrong") {
             fb.textContent = correct ? "✓ " + item.w + " = " + this._ppCorrect
               : "✗ — CORRECT: " + item.w + " = " + item.syns.join(" / ");
           } else {
@@ -2266,6 +2289,17 @@
       const qz = this._ppQuiz;
       const total = qz.list.length;
       const pct = total ? Math.round((qz.score / total) * 100) : 0;
+      // bank the wrong items into the wrong-answer box (not in the
+      // review mode — those already live there)
+      if (qz.mode !== "wrong") {
+        for (const it of qz.wrong) {
+          if (qz.mode === "syn") {
+            Lexicon.addPpWrong({ mode: "syn", w: it.w, syns: it.syns });
+          } else {
+            Lexicon.addPpWrong({ mode: "tfng", src: it.src, q: it.q, ans: it.ans, why: it.why });
+          }
+        }
+      }
       $("ppQuiz").innerHTML =
         '<div class="card sense-card">' +
         '<span class="card-wp">DRILL COMPLETE</span>' +
@@ -2274,7 +2308,9 @@
         '<div class="sense-label">' + qz.score + " / " + total + " CORRECT (" + pct + "%)</div>" +
         (qz.wrong.length
           ? '<div class="log-summary" style="margin-top:var(--sp-2)">' +
-            qz.wrong.map((w) => '<span class="spk-word">' + this.esc(w) + "</span>").join("") + "</div>"
+            qz.wrong.map((w) => '<span class="spk-word">' + this.esc(qz.mode === "syn" ? w.w : w.q) + "</span>").join("") +
+            (qz.mode !== "wrong" ? '<div class="sense-label" style="margin-top:var(--sp-1)">已存入错题库 — 明天 REVIEW WRONG 再练</div>' : "") +
+            "</div>"
           : '<div class="sense-label">ALL CORRECT — PARAPHRASES LOCKED IN ✓</div>') +
         '<div class="step-bar nav-bar"><button class="btn btn-primary" id="ppRestart">↻ DRILL AGAIN</button>' +
         '<button class="btn" id="ppDone">DONE</button></div>' +

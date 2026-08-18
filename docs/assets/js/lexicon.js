@@ -664,6 +664,53 @@
       return out;
     },
 
+    /* ---- paraphrase wrong-answer box (同义替换错题库) ----
+     * Items answered wrong in the synonym / T/F/NG drills are kept
+     * here so the learner can review them the next day. A wrong item
+     * leaves the box after being answered correctly twice in a row.
+     * Record: { mode, w?, syns?, src?, q?, ans?, why?, fails, okStreak, at } */
+    getPpWrong() {
+      return readLS("sls_pp_wrong", {});
+    },
+    savePpWrong(d) { writeLS("sls_pp_wrong", d); },
+    addPpWrong(rec) {
+      const d = this.getPpWrong();
+      const key = rec.mode === "syn" ? rec.w : "tfng:" + rec.q;
+      const prev = d[key];
+      d[key] = Object.assign({}, rec, {
+        fails: (prev ? prev.fails : 0) + 1,
+        okStreak: 0,
+        at: Date.now()
+      });
+      this.savePpWrong(d);
+      return key;
+    },
+    /* a correct answer in the review drill — two in a row clears it */
+    markPpWrongOk(key) {
+      const d = this.getPpWrong();
+      if (!d[key]) return;
+      d[key].okStreak = (d[key].okStreak || 0) + 1;
+      if (d[key].okStreak >= 2) delete d[key];
+      this.savePpWrong(d);
+    },
+    /* an incorrect answer in the review drill — reset the streak */
+    markPpWrongFail(key) {
+      const d = this.getPpWrong();
+      if (!d[key]) return;
+      d[key].okStreak = 0;
+      d[key].fails = (d[key].fails || 0) + 1;
+      this.savePpWrong(d);
+    },
+    removePpWrong(key) {
+      const d = this.getPpWrong();
+      if (d[key]) { delete d[key]; this.savePpWrong(d); }
+    },
+    ppWrongList() {
+      const d = this.getPpWrong();
+      return Object.keys(d).map((k) => Object.assign({ key: k }, d[k]))
+        .sort((a, b) => (a.at || 0) - (b.at || 0));
+    },
+
     /* ---- study history / streak ---- */
     logStudy(newCount, reviewCount, practiceCount) {
       const st = this.state().stats;
