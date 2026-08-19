@@ -633,26 +633,41 @@
           groups.push({ scene: best.s, words: pick });
           budget -= pick.length;
         }
-        // 3) leftover budget: current-theme words first (the arc
-        //    drives the order), then core-first top-up
-        if (budget > 0 && curId) {
-          const pool = Lexicon.themePool(curId)
-            .filter((w) => !used.has(w) && !cards[w] && !Lexicon.isPhrase(w))
-            .sort((a, b) => ((Lexicon.get(a) || {}).p || 2) - ((Lexicon.get(b) || {}).p || 2));
-          for (const w of pool) {
-            if (budget <= 0) break;
-            used.add(w);
-            const ent = Lexicon.get(w) || { w, t: "", us: "", uk: "", p: 2, d: "", e: "" };
-            groups.push({ scene: null, words: [{ key: w, ent, card: null, isNew: true, hot: false }] });
-            budget--;
-          }
-        }
+        // 3) leftover budget — current-theme words (the cognitive
+        //    arc) lead, then the plain candidate list. Both go into
+        //    one ordering: themed core → global core → themed
+        //    extended → global extended → themed supplement → rest,
+        //    so core words always come before extended ones across
+        //    the whole fallback. The raw lists are dictionary-sorted,
+        //    so candidates are SHUFFLED first to avoid an endless
+        //    run of "a…" words when the arc exhausts the themed pool.
         if (budget > 0) {
-          const extras = Lexicon.newCandidates(budget, 0, 0, extra);
-          for (const n of extras) {
+          const cands = [];
+          if (curId) {
+            for (const w of Lexicon.themePool(curId)) {
+              if (used.has(w) || cards[w] || Lexicon.isPhrase(w)) continue;
+              const ent = Lexicon.get(w) || { w, t: "", us: "", uk: "", p: 2, d: "", e: "" };
+              cands.push({ key: w, ent });
+            }
+          }
+          const extras = this._shuffled(
+            Lexicon.newCandidates(budget * 4, 0, 0, extra).filter((n) => !used.has(n.key)));
+          for (const n of extras) cands.push(n);
+          const tiered = { 0: [], 1: [], 2: [] };
+          const themed = { 0: [], 1: [], 2: [] };
+          for (const n of cands) {
+            const p = (Lexicon.get(n.key) || {}).p;
+            const bucket = (curId && Lexicon.themeOf(n.key) === curId) ? themed : tiered;
+            bucket[p === 0 ? 0 : (p === 1 ? 1 : 2)].push(n);
+          }
+          const ordered = [].concat(
+            themed[0], tiered[0], themed[1], tiered[1], themed[2], tiered[2]);
+          for (const n of ordered) {
+            if (budget <= 0) break;
             if (used.has(n.key)) continue;
             used.add(n.key);
             groups.push({ scene: null, words: [{ key: n.key, ent: n.ent, card: null, isNew: true, hot: false }] });
+            budget--;
           }
         }
       }

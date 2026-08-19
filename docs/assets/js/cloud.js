@@ -111,15 +111,23 @@
     },
 
     /* returns true when the local copy has data the cloud lacks
-     * (wrong box / pending words are MERGED, never overwritten) */
+     * (cards / wrong box / pending words are MERGED, never
+     * overwritten — a refresh must not roll back progress) */
     apply(data) {
       const L = global.Lexicon;
       if (!L) return false;
-      // cards — via the lexicon setter (direct L._cards assignment
-      // never reaches the module closure); strip any phrase cards
-      // the cloud copy may still carry (phrases live in PHRASES)
-      L.setCards(data.cards || {});
+      let cloudBehind = false;
+      // cards — MERGE: local state wins per word (a cloud pull must
+      // never roll back cards learned before the debounced push ran),
+      // cloud-only words join the local deck. Applied via the lexicon
+      // setter (direct L._cards assignment never reaches the module
+      // closure); phrase cards the cloud copy may still carry are
+      // stripped (phrases live in the PHRASES module).
+      const c0 = data.cards || {};
+      const mergedC = Object.assign({}, c0, L.cards());
+      L.setCards(mergedC);
       L.stripPhraseCards();
+      if (JSON.stringify(mergedC) !== JSON.stringify(c0)) cloudBehind = true;
       // state (deep-merge settings so unknown fields keep defaults)
       L.setState(Object.assign({}, L.state(), data.state || {}));
       // unfamiliar deck — drop multi-word flagged items too
@@ -131,7 +139,6 @@
       // wrong box + pending queue: UNION merge — a cloud pull must
       // never wipe local misses (quick refresh before the debounced
       // push, failed push, etc.); local wins on same-key conflicts
-      let cloudBehind = false;
       const w0 = data.ppWrong || {};
       const p0 = data.ppPending || {};
       const mergedW = Object.assign({}, w0, L.getPpWrong());
